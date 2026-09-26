@@ -312,3 +312,88 @@ def get_github_commit_history(
         "commit_count": len(commits),
         "commits": commits,
     }
+
+
+# ---------------------------------------------------------------------------
+# Init (for other modules to call before using this one)
+# ---------------------------------------------------------------------------
+
+def init() -> bool:
+    """
+    Validates that this module is ready to use — call once from an importing
+    module's own startup/init phase to fail fast if GITHUB_TOKEN is missing,
+    rather than discovering it deep inside a request.
+
+    Returns:
+        True if GITHUB_TOKEN is present and non-empty.
+
+    Raises:
+        GitHubTokenMissingError: If GITHUB_TOKEN is not set.
+    """
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if not token:
+        raise GitHubTokenMissingError(
+            "GITHUB_TOKEN is not set. Add it to your .env file as: GITHUB_TOKEN=<your_token>"
+        )
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Main (manual/CLI testing)
+# ---------------------------------------------------------------------------
+
+def main():
+    """
+    Quick CLI entry point for manually testing this module.
+
+    Usage:
+        python github_service.py <repo_url> [branch] [max_commits]
+    """
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print("Usage: python github_service.py <repo_url> [branch] [max_commits]")
+        sys.exit(1)
+
+    repo_url = sys.argv[1]
+    branch = sys.argv[2] if len(sys.argv) > 2 else None
+    max_commits = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+
+    try:
+        init()
+        result = get_github_commit_history(repo_url, branch=branch, max_commits=max_commits)
+        print(json.dumps(result, indent=2))
+    except (
+        ValueError,
+        GitHubTokenMissingError,
+        GitHubAuthError,
+        GitHubRepoNotFoundError,
+        GitHubBranchNotFoundError,
+        GitHubAPIError,
+    ) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# ---------------------------------------------------------------------------
+# Usage from another module:
+#
+#   from github_service import init, get_github_commit_history
+#
+#   init()  # optional: raises early if GITHUB_TOKEN is missing/invalid config
+#
+#   result = get_github_commit_history(
+#       repo_url="https://github.com/owner/repo",
+#       branch=None,        # optional — defaults to repo's default branch
+#       max_commits=30,     # optional
+#   )
+#
+#   print(result["commit_count"])
+#   for c in result["commits"]:
+#       print(c["short_sha"], c["author"], c["message"])
+# ---------------------------------------------------------------------------
