@@ -42,7 +42,10 @@ def get_current_user(
     except Exception:
         raise credentials_exception
 
-    user = get_user(user_id)
+    try:
+        user = get_user(user_id)
+    except ValueError:  # 'sub' is not a valid ObjectId
+        raise credentials_exception
     if user is None:
         raise credentials_exception
 
