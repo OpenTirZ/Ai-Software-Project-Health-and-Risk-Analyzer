@@ -1,5 +1,5 @@
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 from Backend.database import (
     users_collection,
     projects_collection,
@@ -12,6 +12,7 @@ from Backend.database import (
     integration_credentials_collection,
     org_settings_collection,
     audit_logs_collection,
+    contributors_collection,
 )
 
 
@@ -156,6 +157,41 @@ def get_project_commits(project_id):
         {"projectId": to_object_id(project_id)}
     )
     return [serialize_document(doc) for doc in documents]
+
+
+def upsert_commit(project_id, commit_data):
+    """
+    Insert a new commit or update an existing one.
+    Uniqueness is enforced on (projectId, sha).
+    """
+    filter_query = {
+        "projectId": to_object_id(project_id),
+        "sha": commit_data["sha"],
+    }
+    update_doc = {
+        "$set": {
+            "projectId": to_object_id(project_id),
+            "sha": commit_data["sha"],
+            "short_sha": commit_data.get("short_sha", commit_data["sha"][:7]),
+            "author": commit_data.get("author", "Unknown"),
+            "github_username": commit_data.get("github_username"),
+            "timestamp": commit_data.get("timestamp"),
+            "message": commit_data.get("message", ""),
+            "additions": commit_data.get("additions", 0),
+            "deletions": commit_data.get("deletions", 0),
+            "total_changes": commit_data.get("total_changes", 0),
+            "updated_at": datetime.now(timezone.utc),
+        }
+    }
+    result = commits_collection.update_one(
+        filter_query, update_doc, upsert=True
+    )
+
+    if result.upserted_id:
+        return str(result.upserted_id)
+
+    document = commits_collection.find_one(filter_query)
+    return str(document["_id"]) if document else None
 
 
 # --------------------------------------------------
@@ -369,3 +405,53 @@ def get_audit_logs(limit=100):
     )
 
     return [serialize_document(doc) for doc in documents]
+
+
+# --------------------------------------------------
+# CONTRIBUTORS
+# --------------------------------------------------
+
+def upsert_contributor(project_id, contributor_data):
+    """
+    Insert a new contributor or update an existing one.
+    Uniqueness is enforced on (projectId, github_username).
+    """
+    filter_query = {
+        "projectId": to_object_id(project_id),
+        "github_username": contributor_data["github_username"],
+    }
+    update_doc = {
+        "$set": {
+            "projectId": to_object_id(project_id),
+            "github_username": contributor_data["github_username"],
+            "github_id": contributor_data.get("github_id"),
+            "avatar_url": contributor_data.get("avatar_url", ""),
+            "profile_url": contributor_data.get("profile_url", ""),
+            "type": contributor_data.get("type", "User"),
+            "contributions": contributor_data.get("contributions", 0),
+            "updated_at": datetime.now(timezone.utc),
+        }
+    }
+    result = contributors_collection.update_one(
+        filter_query, update_doc, upsert=True
+    )
+
+    if result.upserted_id:
+        return str(result.upserted_id)
+
+    document = contributors_collection.find_one(filter_query)
+    return str(document["_id"]) if document else None
+
+
+def get_project_contributors(project_id):
+    documents = contributors_collection.find(
+        {"projectId": to_object_id(project_id)}
+    )
+    return [serialize_document(doc) for doc in documents]
+
+
+def get_contributor(contributor_id):
+    document = contributors_collection.find_one(
+        {"_id": to_object_id(contributor_id)}
+    )
+    return serialize_document(document)

@@ -195,6 +195,72 @@ def _fetch_commit_stats(session: requests.Session, owner: str, repo: str, sha: s
     return {"additions": 0, "deletions": 0, "total_changes": 0}
 
 
+def _fetch_contributors(
+    session: requests.Session,
+    owner: str,
+    repo: str,
+    max_contributors: int = 100,
+) -> list[dict]:
+    """
+    Fetches the list of contributors from a repository, with pagination.
+
+    Follows GitHub's per-page pagination to collect contributors beyond
+    the single-page limit of 100.
+
+    Returns:
+        List of raw contributor objects from GitHub API.
+
+    Raises:
+        GitHubAuthError: On 401 Unauthorized.
+        GitHubRepoNotFoundError: On 404 Not Found.
+        GitHubAPIError: On other API failures.
+    """
+    url = f"https://api.github.com/repos/{owner}/{repo}/contributors"
+    all_contributors: list[dict] = []
+    page = 1
+    per_page = min(max_contributors, 100)
+
+    while len(all_contributors) < max_contributors:
+        params = {"per_page": per_page, "page": page}
+
+        try:
+            response = session.get(url, params=params, timeout=10)
+        except requests.exceptions.RequestException as exc:
+            raise GitHubAPIError(
+                f"Network failure while fetching contributors: {exc}"
+            ) from exc
+
+        if response.status_code == 204:
+            break  # Repository has no contributor data
+
+        if response.status_code == 401:
+            raise GitHubAuthError("Invalid or expired GITHUB_TOKEN.")
+        if response.status_code == 404:
+            raise GitHubRepoNotFoundError(
+                f"Repository '{owner}/{repo}' not found or is not accessible."
+            )
+        if response.status_code == 403 and "rate limit" in response.text.lower():
+            raise GitHubAPIError("GitHub API rate limit exceeded. Try again later.")
+        if not response.ok:
+            raise GitHubAPIError(
+                f"GitHub API error {response.status_code} while fetching contributors."
+            )
+
+        page_data = response.json()
+        if not page_data:
+            break
+
+        all_contributors.extend(page_data)
+
+        # Last page: fewer results than requested per_page
+        if len(page_data) < per_page:
+            break
+
+        page += 1
+
+    return all_contributors[:max_contributors]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -311,6 +377,88 @@ def get_github_commit_history(
         },
         "commit_count": len(commits),
         "commits": commits,
+    }
+
+
+def get_github_contributors(
+    repo_url: str,
+    max_contributors: int = 100,
+) -> dict:
+    """
+    Retrieves contributor list from a GitHub repository.
+
+    Args:
+        repo_url (str): Full GitHub repository URL (e.g. https://github.com/owner/repo).
+        max_contributors (int): Maximum number of contributors to return. Default: 100.
+
+    Returns:
+        dict: Structured response with repository info and contributor list.
+
+        {
+            "success": True,
+            "repository": {
+                "owner": str,
+                "name": str,
+                "full_name": str,
+                "url": str
+            },
+            "contributor_count": int,
+            "contributors": [
+                {
+                    "github_username": str,
+                    "github_id": int,
+                    "avatar_url": str,
+                    "profile_url": str,
+                    "type": str,
+                    "contributions": int
+                },
+                ...
+            ]
+        }
+
+    Raises:
+        ValueError: For an invalid GitHub URL or non-positive max_contributors.
+        GitHubTokenMissingError: If GITHUB_TOKEN is not configured.
+        GitHubAuthError: If GITHUB_TOKEN is invalid or expired.
+        GitHubRepoNotFoundError: If the repository is not found.
+        GitHubAPIError: For GitHub API or network failures.
+    """
+    if max_contributors <= 0:
+        raise ValueError("max_contributors must be a positive integer.")
+
+    # Parse URL → (owner, repo)
+    owner, repo_name = _parse_github_url(repo_url)
+
+    # Build authenticated session (raises GitHubTokenMissingError if no token)
+    session = _get_authenticated_session()
+
+    # Fetch contributors list
+    raw_contributors = _fetch_contributors(
+        session, owner, repo_name, max_contributors
+    )
+
+    # Normalize each contributor
+    contributors = []
+    for raw in raw_contributors:
+        contributors.append({
+            "github_username": raw.get("login", ""),
+            "github_id": raw.get("id"),
+            "avatar_url": raw.get("avatar_url", ""),
+            "profile_url": raw.get("html_url", ""),
+            "type": raw.get("type", "User"),
+            "contributions": raw.get("contributions", 0),
+        })
+
+    return {
+        "success": True,
+        "repository": {
+            "owner": owner,
+            "name": repo_name,
+            "full_name": f"{owner}/{repo_name}",
+            "url": repo_url,
+        },
+        "contributor_count": len(contributors),
+        "contributors": contributors,
     }
 
 

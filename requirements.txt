@@ -1,7 +1,10 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
+pymongo>=4.0.0
+dnspython>=2.0.0
 pytest>=7.4.0
 pytest-mock>=3.11.1
+httpx>=0.24.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
