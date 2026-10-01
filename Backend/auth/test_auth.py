@@ -42,9 +42,44 @@ VALID_SIGNUP_DATA = {
 }
 
 
+_IN_MEMORY_USERS = {}
+
+class MockInsertResult:
+    def __init__(self, inserted_id):
+        self.inserted_id = inserted_id
+
+class MockUsersCollection:
+    def insert_one(self, doc):
+        from bson import ObjectId
+        doc_copy = dict(doc)
+        doc_id = doc_copy.get("_id", ObjectId())
+        doc_copy["_id"] = doc_id
+        _IN_MEMORY_USERS[str(doc_id)] = doc_copy
+        return MockInsertResult(doc_id)
+
+    def find_one(self, query):
+        if "_id" in query:
+            target_id = str(query["_id"])
+            return _IN_MEMORY_USERS.get(target_id)
+        if "email" in query:
+            email_q = query["email"]
+            if isinstance(email_q, dict) and "$regex" in email_q:
+                target = email_q["$regex"].replace("^", "").replace("$", "").lower()
+            else:
+                target = str(email_q).lower()
+            for doc in _IN_MEMORY_USERS.values():
+                if doc.get("email", "").lower() == target:
+                    return doc
+        return None
+
+    def delete_many(self, query):
+        _IN_MEMORY_USERS.clear()
+
 @pytest.fixture(autouse=True)
-def reset_db():
+def reset_db(monkeypatch):
     """Clear in-memory user database before every test."""
+    _IN_MEMORY_USERS.clear()
+    monkeypatch.setattr("Backend.persistence.users_collection", MockUsersCollection())
     clear_users()
 
 
