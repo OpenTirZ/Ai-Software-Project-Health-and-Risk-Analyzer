@@ -127,8 +127,9 @@ def get_projects():
 
 
 def get_projects_by_user(user_id):
+    oid = to_object_id(user_id)
     documents = projects_collection.find(
-        {"members.userId": to_object_id(user_id)}
+        {"$or": [{"members.userId": oid}, {"ownerId": oid}]}
     )
     return [serialize_document(doc) for doc in documents]
 

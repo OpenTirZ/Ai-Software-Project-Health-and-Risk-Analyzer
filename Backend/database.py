@@ -74,4 +74,12 @@ def ensure_indexes():
         unique=True,
         background=True,
     )
+    projects_collection.create_index(
+        [("ownerId", 1)],
+        background=True,
+    )
+    projects_collection.create_index(
+        [("members.userId", 1)],
+        background=True,
+    )
     logger.info("Database indexes ensured.")

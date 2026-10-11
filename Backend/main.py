@@ -51,6 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from Backend.routers.project_router import router as project_router
+app.include_router(project_router)
+
 
 # ---------------------------------------------------------------------------
 # Request models
