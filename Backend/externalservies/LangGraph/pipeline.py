@@ -985,8 +985,27 @@ def main() -> None:
     print("=" * 84)
     print("AI SOFTWARE PROJECT HEALTH & RISK ANALYZER — LANGGRAPH PIPELINE TEST")
     print("=" * 84)
-    print("\n[GRAPH] LangGraph Mermaid diagram (copy this into a Mermaid viewer if desired):\n")
-    print(app_graph.get_graph().draw_mermaid())
+        # Print and display the LangGraph workflow
+    print("\n[GRAPH] Displaying LangGraph workflow...")
+
+    graph = app_graph.get_graph()
+    graph_png = graph.draw_mermaid_png()
+
+    try:
+        from IPython import get_ipython
+        from IPython.display import Image, display
+
+        if get_ipython() is not None:
+            display(Image(graph_png))
+        else:
+            with open("langgraph_workflow.png", "wb") as f:
+                f.write(graph_png)
+            print("[GRAPH] Saved to langgraph_workflow.png")
+
+    except ImportError:
+        with open("langgraph_workflow.png", "wb") as f:
+            f.write(graph_png)
+        print("[GRAPH] Saved to langgraph_workflow.png")
 
     print("\n[TEST] Running the graph against dummy contributor and commit JSON...\n")
     dummy_contributors, dummy_commits = make_dummy_data()
