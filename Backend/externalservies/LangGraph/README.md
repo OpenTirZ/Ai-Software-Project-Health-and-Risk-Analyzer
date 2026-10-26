@@ -28,4 +28,5 @@ python langgraph_project_health_pipeline.py
 The script includes dummy data for testing. Set `OPENROUTER_MODEL` to choose a chat model.
 
 ## V1 limitations
-The health score is a heuristic based on contributor and commit data; it is not a trained prediction. Issue, pull-request, review, and sprint risks are not assessed because those inputs are not included.
+- The health score is a heuristic based on contributor and commit data; it is not a trained prediction. Issue, pull-request, review, and sprint risks are not assessed because those inputs are not included.
+- If commit info become larger and larger then it will be the problem of the context of the LLM model 
