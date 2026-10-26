@@ -15,6 +15,8 @@ V1 analyzes GitHub contributors and commits with LangGraph and returns a JSON pr
 5. Generate AI insights
 6. Build the final JSON report
 
+![LangGraph Workflow V1](Versions/langgraph_workflowV1.png)
+
 ## Output
 The report includes project health, contributor analysis, commit analysis, an executive summary, recommendations, and limitations.
 
