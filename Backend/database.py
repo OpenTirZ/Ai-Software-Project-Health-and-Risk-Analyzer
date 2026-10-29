@@ -83,6 +83,9 @@ def ensure_indexes():
 
     Commits: unique compound index on (projectId, sha)
     to prevent duplicate commits within the same project.
+
+    Issues: unique compound index on (projectId, github_id) so repeated
+    GitHub issue synchronization cannot create duplicate issues.
     """
     try:
         contributors_collection.create_index(
@@ -102,6 +105,15 @@ def ensure_indexes():
         projects_collection.create_index(
             [("members.userId", 1)],
             background=True,
+        )
+        # Issues: one document per (projectId, github_id). The partial filter
+        # ignores legacy issue documents that have no github_id, so creating
+        # this index can never fail because of older manually-created data.
+        issues_collection.create_index(
+            [("projectId", 1), ("github_id", 1)],
+            unique=True,
+            background=True,
+            partialFilterExpression={"github_id": {"$exists": True}},
         )
         logger.info("Database indexes ensured.")
     except Exception as exc:  # pragma: no cover
