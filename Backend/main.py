@@ -31,6 +31,7 @@ from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
 from Backend.routers.data_sync_router import router as data_sync_router
 from Backend.routers.project_router import router as project_router
+from Backend.routers.threshold_router import router as threshold_router
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +160,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(project_router)
 app.include_router(data_sync_router)
+app.include_router(threshold_router)
 
 
 # ---------------------------------------------------------------------------
