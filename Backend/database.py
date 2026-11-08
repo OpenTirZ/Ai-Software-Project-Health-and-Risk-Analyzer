@@ -66,6 +66,8 @@ integration_credentials_collection = db["integration_credentials"]
 org_settings_collection = db["org_settings"]
 audit_logs_collection = db["audit_logs"]
 contributors_collection = db["contributors"]
+milestones_collection = db["milestones"]
+metric_snapshots_collection = db["metric_snapshots"]
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +84,10 @@ def ensure_indexes():
     allowing the same GitHub user across different projects.
 
     Commits: unique compound index on (projectId, sha)
+    Pull Requests: unique compound index on (projectId, number) [UNIQUE]
+    Issues: unique compound index on (projectId, number) [UNIQUE]
+    Milestones: unique compound index on (projectId, milestone_id) [UNIQUE]
+    Metric Snapshots: compound index on (projectId, calculatedAt)
     to prevent duplicate commits within the same project.
 
     Issues: unique compound index on (projectId, github_id) so repeated
@@ -91,6 +97,25 @@ def ensure_indexes():
         contributors_collection.create_index(
             [("projectId", 1), ("github_username", 1)],
             unique=True,
+            background=True,
+        )
+        pull_requests_collection.create_index(
+            [("projectId", 1), ("number", 1)],
+            unique=True,
+            background=True,
+        )
+        issues_collection.create_index(
+            [("projectId", 1), ("number", 1)],
+            unique=True,
+            background=True,
+        )
+        milestones_collection.create_index(
+            [("projectId", 1), ("milestone_id", 1)],
+            unique=True,
+            background=True,
+        )
+        metric_snapshots_collection.create_index(
+            [("projectId", 1), ("calculatedAt", 1)],
             background=True,
         )
         commits_collection.create_index(
