@@ -1,7 +1,13 @@
 import logging
 from bson import ObjectId
 from datetime import datetime, timezone
-from pymongo.errors import PyMongoError, ServerSelectionTimeoutError, ConnectionFailure
+from pymongo import UpdateOne
+from pymongo.errors import (
+    BulkWriteError,
+    ConnectionFailure,
+    PyMongoError,
+    ServerSelectionTimeoutError,
+)
 from Backend.database import (
     users_collection,
     projects_collection,
@@ -390,6 +396,142 @@ def get_project_issues(project_id):
         {"projectId": to_object_id(project_id)}
     )
     return [serialize_document(doc) for doc in documents]
+
+
+def bulk_upsert_issues(project_id, issues):
+    """
+    Insert or update many synchronized GitHub issues in ONE database call.
+
+    Issue identity is the compound key (projectId, github_id), so running the
+    same synchronization twice updates the existing documents instead of
+    creating duplicates.
+
+    Args:
+        project_id: Project ObjectId (string or ObjectId).
+        issues: List of normalized issue dicts. Every dict must contain a
+            ``github_id``; the remaining fields are optional and default to
+            safe empty values.
+
+    Returns:
+        dict with ``matched_count``, ``modified_count`` and ``upserted_count``
+        taken directly from MongoDB's bulk-write result. An empty ``issues``
+        list performs no database call and returns zeros; it never deletes
+        previously stored issues.
+
+    Raises:
+        ValueError: If project_id is invalid or an issue has no github_id.
+        DatabaseError: On any connectivity, driver or bulk-write failure.
+            Because the bulk write is unordered and MongoDB has no
+            multi-document transaction on a standalone server, a failure
+            may leave some issues written. Re-running the sync is safe
+            (idempotent) and completes the remaining writes.
+    """
+    if not issues:
+        return {"matched_count": 0, "modified_count": 0, "upserted_count": 0}
+
+    project_oid = to_object_id(project_id)
+    synced_at = datetime.now(timezone.utc)
+    operations = []
+
+    for issue in issues:
+        if issue.get("github_id") is None:
+            raise ValueError("Every issue must contain a github_id.")
+
+        operations.append(
+            UpdateOne(
+                {"projectId": project_oid, "github_id": issue["github_id"]},
+                {
+                    "$set": {
+                        "projectId": project_oid,
+                        "github_id": issue["github_id"],
+                        "number": issue.get("number"),
+                        "title": issue.get("title", ""),
+                        "state": issue.get("state"),
+                        "assignees": issue.get("assignees", []),
+                        "labels": issue.get("labels", []),
+                        "comments": issue.get("comments", 0),
+                        "created_at": issue.get("created_at"),
+                        "updated_at": issue.get("updated_at"),
+                        "closed_at": issue.get("closed_at"),
+                        "html_url": issue.get("html_url"),
+                        "author": issue.get("author"),
+                        "repository": issue.get("repository"),
+                        "repository_url": issue.get("repository_url"),
+                        # When OUR database last wrote this issue. Kept
+                        # separate from GitHub's own updated_at above.
+                        "synced_at": synced_at,
+                    }
+                },
+                upsert=True,
+            )
+        )
+
+    try:
+        result = issues_collection.bulk_write(operations, ordered=False)
+    except BulkWriteError as exc:
+        logger.error("Bulk write failed during bulk_upsert_issues: %s", exc.details)
+        raise DatabaseError(
+            "A database error occurred while saving issues."
+        ) from exc
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        logger.error("Database unreachable during bulk_upsert_issues: %s", exc)
+        raise DatabaseError(
+            "Database is temporarily unavailable. Please try again later."
+        ) from exc
+    except PyMongoError as exc:
+        logger.error("Database error during bulk_upsert_issues: %s", exc)
+        raise DatabaseError(
+            "A database error occurred while saving issues."
+        ) from exc
+
+    return {
+        "matched_count": result.matched_count,
+        "modified_count": result.modified_count,
+        "upserted_count": result.upserted_count,
+    }
+
+    # EXPLANATION (bulk_upsert_issues):
+    # Builds one UpdateOne(upsert=True) per issue and sends them all with a
+    # single bulk_write call, so 500 issues cost one round trip rather than
+    # 500. The filter (projectId, github_id) is the identity of an issue.
+    # The counts returned are MongoDB's own numbers, so the API never
+    # reports more than the database confirmed.
+
+
+def list_project_issues(project_id, state=None):
+    """
+    Return the stored issues of ONE project, newest GitHub activity first.
+
+    Args:
+        project_id: Project ObjectId (string or ObjectId).
+        state: Optional ``"open"`` or ``"closed"`` filter.
+
+    Raises:
+        ValueError: If project_id is not a valid ObjectId.
+        DatabaseError: On connectivity or driver failures.
+    """
+    query = {"projectId": to_object_id(project_id)}
+    if state:
+        query["state"] = state
+
+    try:
+        documents = issues_collection.find(query).sort("updated_at", -1)
+        return [serialize_document(doc) for doc in documents]
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        logger.error("Database unreachable during list_project_issues: %s", exc)
+        raise DatabaseError(
+            "Database is temporarily unavailable. Please try again later."
+        ) from exc
+    except PyMongoError as exc:
+        logger.error("Database error during list_project_issues: %s", exc)
+        raise DatabaseError(
+            "A database error occurred while retrieving issues."
+        ) from exc
+
+    # EXPLANATION (list_project_issues):
+    # Always filters by projectId first, so one project can never see the
+    # issues of another. The optional state filter and the updated_at sort
+    # are done inside MongoDB (not in Python) to keep the read to one query.
 
 
 def update_issue(issue_id, update_data):

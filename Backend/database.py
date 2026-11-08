@@ -89,6 +89,9 @@ def ensure_indexes():
     Milestones: unique compound index on (projectId, milestone_id) [UNIQUE]
     Metric Snapshots: compound index on (projectId, calculatedAt)
     to prevent duplicate commits within the same project.
+
+    Issues: unique compound index on (projectId, github_id) so repeated
+    GitHub issue synchronization cannot create duplicate issues.
     """
     try:
         contributors_collection.create_index(
@@ -128,6 +131,40 @@ def ensure_indexes():
             [("members.userId", 1)],
             background=True,
         )
+        # Issues: one document per (projectId, github_id). The partial filter
+        # ignores legacy issue documents that have no github_id, so creating
+        # this index can never fail because of older manually-created data.
+        issues_collection.create_index(
+            [("projectId", 1), ("github_id", 1)],
+            unique=True,
+            background=True,
+            partialFilterExpression={"github_id": {"$exists": True}},
+        )
+        # --- telemetry indexes (Om Patel) ---
+        pull_requests_collection.create_index(
+            [("projectId", 1), ("number", 1)],
+            unique=True,
+            background=True,
+            name="uniq_project_number",
+        )
+        issues_collection.create_index(
+            [("projectId", 1), ("number", 1)],
+            unique=True,
+            background=True,
+            name="uniq_project_number",
+        )
+        db["milestones"].create_index(
+            [("projectId", 1), ("milestone_id", 1)],
+            unique=True,
+            background=True,
+            name="uniq_project_milestone",
+        )
+        db["metric_snapshots"].create_index(
+            [("projectId", 1), ("calculatedAt", -1)],
+            background=True,
+            name="project_calculatedAt",
+        )
+        # --- end telemetry indexes ---
         logger.info("Database indexes ensured.")
     except Exception as exc:  # pragma: no cover
         # Non-fatal: indexes may already exist or be created on the next startup.
