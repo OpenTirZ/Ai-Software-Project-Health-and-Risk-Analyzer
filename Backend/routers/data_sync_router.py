@@ -1,6 +1,6 @@
 
 """
-FastAPI router for Contributor and Commit synchronization.
+FastAPI router for Contributor, Commit, Issue, and Pull Request synchronization.
 
 Endpoints:
     GET  /api/projects/{project_id}/contributors
@@ -9,6 +9,8 @@ Endpoints:
     POST /api/projects/{project_id}/sync-commits
     GET  /api/projects/{project_id}/issues
     POST /api/projects/{project_id}/sync-issues
+    GET  /api/projects/{project_id}/prs
+    POST /api/projects/{project_id}/sync-prs
 """
 
 from typing import List, Optional
@@ -41,6 +43,10 @@ from Backend.externalservies.github_issues import (
     get_issues_for_project,
     sync_project_issues,
 )
+from Backend.externalservies.github_prs import (
+    get_prs_for_project,
+    sync_project_prs,
+)
 from Backend.persistence import get_project, get_project_contributors
 from Backend.persistence import DatabaseError
 from Backend.routers.project_router import (
@@ -67,6 +73,10 @@ class SyncCommitsRequest(BaseModel):
 
 
 class SyncIssuesRequest(BaseModel):
+    repo_url: Optional[str] = None
+
+
+class SyncPRsRequest(BaseModel):
     repo_url: Optional[str] = None
 
 
@@ -357,3 +367,100 @@ def sync_issues(
     # service (missing repo, GitHub errors, database errors) is converted by
     # the shared _map_github_errors, so users get proper 4xx/5xx codes and
     # never a stack trace.
+
+
+# ---------------------------------------------------------------------------
+# Pull Request endpoints
+# ---------------------------------------------------------------------------
+
+class PRResponse(BaseModel):
+    """Public representation of one persisted GitHub pull request."""
+
+    id: str
+    project_id: Optional[str] = None
+    number: int
+    title: str
+    author: Optional[str] = None
+    state: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    closed_at: Optional[str] = None
+    merged_at: Optional[str] = None
+    requested_reviewers: List[str] = []
+    reviews_count: int = 0
+    additions: int = 0
+    deletions: int = 0
+    open_duration_hours: float = 0.0
+    html_url: Optional[str] = None
+
+
+class SyncPRsResponse(BaseModel):
+    """Summary returned after a successful PR synchronization."""
+
+    success: bool
+    status: str
+    project_id: str
+    repository: dict
+    fetched_count: int
+    created_count: int
+    updated_count: int
+
+
+@router.get(
+    "/{project_id}/prs",
+    response_model=List[PRResponse],
+    summary="List project pull requests",
+)
+def get_pull_requests(
+    project_id: str,
+    state: Optional[str] = Query(
+        default=None,
+        pattern="^(open|closed|merged)$",
+        description="Optional filter: open, closed, or merged.",
+    ),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Retrieve the pull requests stored for a project (never calls GitHub).
+
+    Requires authentication and verified project membership.
+    """
+    _parse_object_id(project_id)
+    _require_project_member(project_id, current_user)
+
+    try:
+        return get_prs_for_project(project_id, state=state)
+    except Exception as exc:
+        raise _map_github_errors(exc)
+
+
+@router.post(
+    "/{project_id}/sync-prs",
+    response_model=SyncPRsResponse,
+    summary="Sync pull requests from GitHub",
+)
+def sync_prs(
+    project_id: str,
+    request: Optional[SyncPRsRequest] = None,
+    current_user: dict = Depends(
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+    ),
+):
+    """
+    Fetch all open, closed, and merged pull requests from GitHub and
+    store them with upsert.
+
+    Requires an admin or project-manager role and project membership.
+    The request body is optional; the project's configured repository is
+    used unless a matching repo_url is supplied.
+    """
+    _parse_object_id(project_id)
+    _require_project_member(project_id, current_user)
+
+    try:
+        return sync_project_prs(
+            project_id=project_id,
+            repo_url=request.repo_url if request else None,
+        )
+    except Exception as exc:
+        raise _map_github_errors(exc)
