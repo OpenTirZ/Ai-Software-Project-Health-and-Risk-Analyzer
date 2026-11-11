@@ -187,6 +187,22 @@ class TestCompletionPercentage:
         result = calculate_completion_percentage(0, 999999)
         assert 0.0 <= result <= 100.0
 
+    def test_negative_open_issues_treated_as_zero(self):
+        result = calculate_completion_percentage(-5, 10)
+        assert result == 100.0
+
+    def test_negative_closed_issues_treated_as_zero(self):
+        result = calculate_completion_percentage(10, -5)
+        assert result == 0.0
+
+    def test_both_negative_returns_zero(self):
+        result = calculate_completion_percentage(-10, -5)
+        assert result == 0.0
+
+    def test_float_issue_counts_handled(self):
+        result = calculate_completion_percentage(5.5, 5.5)
+        assert result == 50.0
+
 
 # ===========================================================================
 # 1b. Issue-to-Milestone Mapping Tests
@@ -328,6 +344,16 @@ class TestNormalizeMilestone:
 
     def test_missing_number_and_id_raises(self):
         raw = {"title": "No ID", "state": "open"}
+        with pytest.raises(GitHubAPIError, match="identifier"):
+            _normalize_milestone(raw)
+
+    def test_empty_string_number_raises(self):
+        raw = {"number": "", "title": "Empty ID", "state": "open"}
+        with pytest.raises(GitHubAPIError, match="identifier"):
+            _normalize_milestone(raw)
+
+    def test_whitespace_string_number_raises(self):
+        raw = {"number": "   ", "title": "Whitespace ID", "state": "open"}
         with pytest.raises(GitHubAPIError, match="identifier"):
             _normalize_milestone(raw)
 
@@ -529,6 +555,21 @@ class TestFetchMilestonesByState:
         assert len(items) == 225
         assert mock_request.call_count == 3  # NOT 4
 
+    @patch("Backend.externalservies.github_milestones._request_milestone_page")
+    def test_overflow_max_pages_raises(self, mock_request):
+        """If repo has more than MAX_PAGES, raise GitHubAPIError."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.headers = {}
+        # Always return 100 items (full page)
+        resp.json.return_value = [{"number": i} for i in range(100)]
+        mock_request.return_value = resp
+
+        session = MagicMock()
+        with pytest.raises(GitHubAPIError, match="more than 100 pages"):
+            _fetch_milestones_by_state(session, "o", "r", "open")
+
 
 class TestFetchAllMilestones:
     @patch("Backend.externalservies.github_milestones._fetch_milestones_by_state")
@@ -543,6 +584,29 @@ class TestFetchAllMilestones:
         assert mock_fetch.call_count == 2
         mock_fetch.assert_any_call(session, "o", "r", "open")
         mock_fetch.assert_any_call(session, "o", "r", "closed")
+
+    @patch("Backend.externalservies.github_milestones._fetch_all_milestones")
+    @patch("Backend.externalservies.github_milestones._get_authenticated_session")
+    @patch("Backend.externalservies.github_milestones._parse_github_url")
+    def test_get_github_milestones_deduplicates_by_id(
+        self, mock_parse, mock_session, mock_fetch
+    ):
+        """When same milestone appears in open and closed lists, keep latest unique."""
+        mock_parse.return_value = ("o", "r")
+        mock_session.return_value = MagicMock()
+        mock_fetch.return_value = [
+            {"number": 1, "title": "M1", "state": "open"},
+            {"number": 1, "title": "M1", "state": "closed"},  # duplicate with closed state
+            {"number": 2, "title": "M2", "state": "open"},
+        ]
+
+        result = get_github_milestones("https://github.com/o/r")
+        milestones = result["milestones"]
+
+        assert len(milestones) == 2
+        # Verify milestone 1 is present only once and updated to closed state
+        m1 = next(m for m in milestones if m["milestone_id"] == "1")
+        assert m1["state"] == "closed"
 
 
 # ===========================================================================

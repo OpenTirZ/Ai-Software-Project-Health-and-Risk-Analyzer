@@ -225,6 +225,11 @@ def _fetch_milestones_by_state(
         # Stop when page is incomplete or empty
         if len(page_items) < MILESTONES_PER_PAGE:
             break
+    else:
+        raise GitHubAPIError(
+            f"Repository '{owner}/{repo}' has more than {MAX_PAGES} "
+            f"pages of milestones; refusing to synchronize a partial list."
+        )
 
     return items
 
@@ -281,10 +286,12 @@ def calculate_completion_percentage(
     Returns 0.0 when there are no issues (prevents division by zero).
     Guarantees the result is between 0.0 and 100.0.
     """
-    total = open_issues + closed_issues
+    safe_open = max(int(open_issues), 0) if isinstance(open_issues, (int, float)) and not isinstance(open_issues, bool) else 0
+    safe_closed = max(int(closed_issues), 0) if isinstance(closed_issues, (int, float)) and not isinstance(closed_issues, bool) else 0
+    total = safe_open + safe_closed
     if total <= 0:
         return 0.0
-    percentage = (closed_issues / total) * 100.0
+    percentage = (safe_closed / total) * 100.0
     return round(min(max(percentage, 0.0), 100.0), 2)
 
 
@@ -373,7 +380,11 @@ def _normalize_milestone(raw: dict) -> dict:
     if milestone_id is None:
         # Fall back to "id" if "number" is absent
         milestone_id = raw.get("id")
-    if milestone_id is None or isinstance(milestone_id, bool):
+    if (
+        milestone_id is None
+        or isinstance(milestone_id, bool)
+        or not str(milestone_id).strip()
+    ):
         raise GitHubAPIError("GitHub returned a milestone without a valid identifier.")
 
     title = raw.get("title")
@@ -435,17 +446,20 @@ def get_github_milestones(repo_url: str) -> dict:
     session = _get_authenticated_session()
     raw_items = _fetch_all_milestones(session, owner, repo)
 
-    milestones: list[dict] = []
+    milestones_by_id: dict[str, dict] = {}
     for raw in raw_items:
         try:
-            milestones.append(_normalize_milestone(raw))
+            normalized = _normalize_milestone(raw)
+            ms_id = normalized["milestone_id"]
+            # Deduplicate by milestone_id: later state (e.g. closed) updates earlier
+            milestones_by_id[ms_id] = normalized
         except GitHubAPIError as exc:
             # Skip individual malformed milestones but log the issue
             logger.warning("Skipping malformed milestone: %s", exc)
 
     return {
         "repository": repository,
-        "milestones": milestones,
+        "milestones": list(milestones_by_id.values()),
     }
 
 
