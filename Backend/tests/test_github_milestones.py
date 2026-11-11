@@ -203,6 +203,22 @@ class TestCompletionPercentage:
         result = calculate_completion_percentage(5.5, 5.5)
         assert result == 50.0
 
+    def test_nan_inputs_handled(self):
+        assert calculate_completion_percentage(float("nan"), 10) == 100.0
+        assert calculate_completion_percentage(10, float("nan")) == 0.0
+        assert calculate_completion_percentage(float("nan"), float("nan")) == 0.0
+
+    def test_inf_inputs_handled(self):
+        assert calculate_completion_percentage(float("inf"), 10) == 100.0
+        assert calculate_completion_percentage(10, float("inf")) == 0.0
+        assert calculate_completion_percentage(float("inf"), float("inf")) == 0.0
+
+    def test_string_and_none_inputs_handled(self):
+        assert calculate_completion_percentage("10", "10") == 50.0
+        assert calculate_completion_percentage(None, 5) == 100.0
+        assert calculate_completion_percentage(5, None) == 0.0
+        assert calculate_completion_percentage(True, False) == 0.0
+
 
 # ===========================================================================
 # 1b. Issue-to-Milestone Mapping Tests
@@ -276,6 +292,21 @@ class TestSafeInt:
 
     def test_custom_default(self):
         assert _safe_int(None, default=99) == 99
+
+    def test_nan_returns_default(self):
+        assert _safe_int(float("nan")) == 0
+
+    def test_inf_returns_default(self):
+        assert _safe_int(float("inf")) == 0
+        assert _safe_int(float("-inf")) == 0
+
+    def test_string_with_whitespace(self):
+        assert _safe_int("  15  ") == 15
+
+    def test_huge_overflow_handled(self):
+        # float('inf') raises OverflowError when converted to int in Python
+        assert _safe_int(float("inf")) == 0
+        assert _safe_int(float("-inf")) == 0
 
 
 # ===========================================================================
@@ -361,6 +392,26 @@ class TestNormalizeMilestone:
         raw = {"number": True, "title": "Boolean", "state": "open"}
         with pytest.raises(GitHubAPIError, match="identifier"):
             _normalize_milestone(raw)
+
+    def test_zero_number_raises(self):
+        raw = {"number": 0, "title": "Zero ID", "state": "open"}
+        with pytest.raises(GitHubAPIError, match="identifier"):
+            _normalize_milestone(raw)
+
+    def test_negative_number_raises(self):
+        raw = {"number": -1, "title": "Neg ID", "state": "open"}
+        with pytest.raises(GitHubAPIError, match="identifier"):
+            _normalize_milestone(raw)
+
+    def test_zero_string_number_raises(self):
+        raw = {"number": "0", "title": "Zero Str", "state": "open"}
+        with pytest.raises(GitHubAPIError, match="identifier"):
+            _normalize_milestone(raw)
+
+    def test_valid_string_id_supported(self):
+        raw = {"id": "m-v1.0", "title": "Sprint 1", "state": "open"}
+        result = _normalize_milestone(raw)
+        assert result["milestone_id"] == "m-v1.0"
 
     def test_missing_title_gets_default(self):
         raw = {"number": 1, "state": "open"}

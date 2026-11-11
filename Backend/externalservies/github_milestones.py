@@ -26,6 +26,7 @@ Task: TASK-SP2-08 (Issue #72) — Prince Savaliya
 """
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -262,21 +263,22 @@ def _safe_int(value: Any, default: int = 0) -> int:
     Convert a value to a non-negative integer safely.
 
     Returns ``default`` for None, negative, boolean, or non-numeric values.
+    Handles floats, strings with whitespace, NaN, Infinity, and overflow safely.
     """
-    if value is None:
-        return default
-    if isinstance(value, bool):
+    if value is None or isinstance(value, bool):
         return default
     try:
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            return default
         result = int(value)
         return result if result >= 0 else default
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return default
 
 
 def calculate_completion_percentage(
-    open_issues: int,
-    closed_issues: int,
+    open_issues: Any,
+    closed_issues: Any,
 ) -> float:
     """
     Calculate milestone completion as a percentage.
@@ -284,10 +286,10 @@ def calculate_completion_percentage(
     Formula: closed / (open + closed) * 100
 
     Returns 0.0 when there are no issues (prevents division by zero).
-    Guarantees the result is between 0.0 and 100.0.
+    Guarantees the result is a finite float between 0.0 and 100.0.
     """
-    safe_open = max(int(open_issues), 0) if isinstance(open_issues, (int, float)) and not isinstance(open_issues, bool) else 0
-    safe_closed = max(int(closed_issues), 0) if isinstance(closed_issues, (int, float)) and not isinstance(closed_issues, bool) else 0
+    safe_open = _safe_int(open_issues)
+    safe_closed = _safe_int(closed_issues)
     total = safe_open + safe_closed
     if total <= 0:
         return 0.0
@@ -376,16 +378,24 @@ def _normalize_milestone(raw: dict) -> dict:
         GitHubAPIError: if a required field is missing or invalid.
     """
     # milestone_id: GitHub uses "number" as the stable identifier
-    milestone_id = raw.get("number")
-    if milestone_id is None:
+    raw_id = raw.get("number")
+    if raw_id is None:
         # Fall back to "id" if "number" is absent
-        milestone_id = raw.get("id")
-    if (
-        milestone_id is None
-        or isinstance(milestone_id, bool)
-        or not str(milestone_id).strip()
-    ):
+        raw_id = raw.get("id")
+
+    if raw_id is None or isinstance(raw_id, bool):
         raise GitHubAPIError("GitHub returned a milestone without a valid identifier.")
+
+    try:
+        id_int = int(str(raw_id).strip())
+        if id_int <= 0:
+            raise GitHubAPIError(f"GitHub returned an invalid milestone identifier: {raw_id}")
+        milestone_id = str(id_int)
+    except (ValueError, TypeError, OverflowError):
+        cleaned = str(raw_id).strip()
+        if not cleaned:
+            raise GitHubAPIError("GitHub returned a milestone without a valid identifier.")
+        milestone_id = cleaned
 
     title = raw.get("title")
     if not isinstance(title, str) or not title.strip():
