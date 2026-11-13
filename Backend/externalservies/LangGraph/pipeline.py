@@ -43,3 +43,20 @@ try:
     load_dotenv()
 except ImportError:  # .env support is optional
     pass
+
+
+PIPELINE_VERSION = "2.0.0"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# This is a chat/generation model. Do not use an embedding-only model here.
+DEFAULT_CHAT_MODEL = "nvidia/nemotron-3.5-super-vl:free"
+MAX_RECENT_COMMITS = 10
+MAX_PROMPT_TOP_CONTRIBUTORS = 8
+MAX_PROMPT_RECENT_COMMITS = 5
+MAX_COMMIT_MESSAGE_LENGTH = 300
+
+NOT_ASSESSED = [
+    "Issue age, stale issues and issue-resolution time (issue records were not supplied).",
+    "Pull-request backlog, review latency and merge bottlenecks (PR/review records were not supplied).",
+    "Sprint completion, milestone slippage and schedule risk (sprint/milestone records were not supplied).",
+    "Code correctness, maintainability, bugs and test coverage (source diffs and test results were not supplied).",
+]
