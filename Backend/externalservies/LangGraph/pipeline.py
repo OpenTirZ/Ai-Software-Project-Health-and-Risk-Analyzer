@@ -35,6 +35,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 try:
@@ -124,7 +125,10 @@ METRICS SNAPSHOT (JSON):
 """.strip()
 
 REPORT_PROMPT = ChatPromptTemplate.from_messages(
-    [("system", SYSTEM_PROMPT), ("human", HUMAN_PROMPT)]
+    [
+        SystemMessage(content=SYSTEM_PROMPT),
+        ("human", HUMAN_PROMPT)
+    ]
 )
 
 
