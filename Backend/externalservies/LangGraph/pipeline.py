@@ -126,3 +126,23 @@ METRICS SNAPSHOT (JSON):
 REPORT_PROMPT = ChatPromptTemplate.from_messages(
     [("system", SYSTEM_PROMPT), ("human", HUMAN_PROMPT)]
 )
+
+
+class PipelineState(TypedDict, total=False):
+    contributors: Any
+    commits: Any
+    debug: bool
+    as_of: Any
+
+    normalized_contributors: list[dict[str, Any]]
+    normalized_commits: list[dict[str, Any]]
+    project_id: str | None
+    input_quality: dict[str, Any]
+
+    contributor_analysis: dict[str, Any]
+    commit_analysis: dict[str, Any]
+    health_analysis: dict[str, Any]
+    ai_analysis: dict[str, Any]
+    llm_status: dict[str, Any]
+    report: dict[str, Any]
+
