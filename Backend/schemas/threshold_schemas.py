@@ -39,13 +39,13 @@ class ThresholdConfig(BaseModel):
     )
     workload_imbalance_ratio: float = Field(
         default=DEFAULT_WORKLOAD_IMBALANCE_RATIO,
-        gt=1.0,
+        ge=1.01,
         le=20.0,
         description="Ratio of highest contributor activity to team median before workload imbalance is flagged (1.01 to 20.0).",
     )
     bus_factor_threshold: float = Field(
         default=DEFAULT_BUS_FACTOR_THRESHOLD,
-        gt=0.0,
+        ge=0.01,
         le=1.0,
         description="Proportion of total commits by a single contributor that flags a bus factor risk (0.01 to 1.0, e.g. 0.60 for 60%).",
     )
@@ -71,17 +71,15 @@ class ThresholdConfig(BaseModel):
     @field_validator("workload_imbalance_ratio")
     @classmethod
     def validate_workload_ratio(cls, v: float) -> float:
-        if v <= 1.0:
-            raise ValueError("workload_imbalance_ratio must be strictly greater than 1.0.")
-        if v > 20.0:
-            raise ValueError("workload_imbalance_ratio cannot exceed 20.0.")
+        if v < 1.01 or v > 20.0:
+            raise ValueError("workload_imbalance_ratio must be between 1.01 and 20.0.")
         return round(float(v), 2)
 
     @field_validator("bus_factor_threshold")
     @classmethod
     def validate_bus_factor(cls, v: float) -> float:
-        if v <= 0.0 or v > 1.0:
-            raise ValueError("bus_factor_threshold must be between 0.01 and 1.0 (e.g. 0.60 for 60%).")
+        if v < 0.01 or v > 1.0:
+            raise ValueError("bus_factor_threshold must be between 0.01 and 1.0.")
         return round(float(v), 2)
 
 
@@ -102,13 +100,13 @@ class UpdateThresholdsRequest(BaseModel):
     )
     workload_imbalance_ratio: Optional[float] = Field(
         None,
-        gt=1.0,
+        ge=1.01,
         le=20.0,
         description="Ratio of highest contributor activity to median (1.01 to 20.0).",
     )
     bus_factor_threshold: Optional[float] = Field(
         None,
-        gt=0.0,
+        ge=0.01,
         le=1.0,
         description="Bus factor threshold proportion (0.01 to 1.0).",
     )
@@ -137,10 +135,8 @@ class UpdateThresholdsRequest(BaseModel):
     @classmethod
     def validate_workload_ratio(cls, v: Optional[float]) -> Optional[float]:
         if v is not None:
-            if v <= 1.0:
-                raise ValueError("workload_imbalance_ratio must be strictly greater than 1.0.")
-            if v > 20.0:
-                raise ValueError("workload_imbalance_ratio cannot exceed 20.0.")
+            if v < 1.01 or v > 20.0:
+                raise ValueError("workload_imbalance_ratio must be between 1.01 and 20.0.")
             return round(float(v), 2)
         return v
 
@@ -148,8 +144,8 @@ class UpdateThresholdsRequest(BaseModel):
     @classmethod
     def validate_bus_factor(cls, v: Optional[float]) -> Optional[float]:
         if v is not None:
-            if v <= 0.0 or v > 1.0:
-                raise ValueError("bus_factor_threshold must be between 0.01 and 1.0 (e.g. 0.60 for 60%).")
+            if v < 0.01 or v > 1.0:
+                raise ValueError("bus_factor_threshold must be between 0.01 and 1.0.")
             return round(float(v), 2)
         return v
 
