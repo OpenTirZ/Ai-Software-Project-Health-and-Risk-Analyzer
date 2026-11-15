@@ -1,0 +1,127 @@
+import React from 'react';
+import type { PageView, UserProfileData } from '../types';
+import { ChevronRight, Bell, GitBranch } from 'lucide-react';
+
+interface TopBarProps {
+  currentView: PageView;
+  selectedRepo: string;
+  currentUser?: UserProfileData;
+  onSelectRepo: (repo: string) => void;
+  onNavigate: (view: PageView) => void;
+}
+
+export const TopBar: React.FC<TopBarProps> = ({
+  currentView,
+  selectedRepo,
+  currentUser,
+  onSelectRepo,
+  onNavigate,
+}) => {
+  const getBreadcrumbTitle = () => {
+    switch (currentView) {
+      case 'projects':
+        return 'All Repositories';
+      case 'create-project':
+        return 'Create New Project';
+      case 'connect-repo':
+        return 'Connect Repository';
+      case 'overview':
+        return 'Project Overview';
+      case 'health-analysis':
+        return 'Health Analysis';
+      case 'risk-analysis':
+        return 'Risk Analysis & Vulnerability';
+      case 'contributors':
+        return 'Contributors';
+      case 'activity':
+        return 'Project Activity';
+      case 'reports':
+        return 'Reports';
+      case 'profile':
+        return 'User Profile';
+      default:
+        return 'Dashboard';
+    }
+  };
+
+  const initials = currentUser?.fullName
+    ? currentUser.fullName
+        .trim()
+        .split(/\s+/)
+        .map((part) => part[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'U';
+
+  return (
+    <header className="h-[68px] bg-[#0c1022] border-b border-slate-800/80 px-6 flex items-center justify-between text-slate-300 shrink-0">
+      {/* Breadcrumb path */}
+      <div className="flex items-center gap-2 text-[13px]">
+        <button 
+          onClick={() => onNavigate('projects')}
+          className="text-slate-400 hover:text-slate-200 transition-colors font-medium cursor-pointer"
+        >
+          Dashboard
+        </button>
+        <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+        
+        {currentView !== 'projects' && currentView !== 'profile' && currentView !== 'create-project' && currentView !== 'connect-repo' && (
+          <>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800/50 border border-slate-700/50 text-slate-300 text-xs font-mono">
+              <GitBranch className="w-3 h-3 text-indigo-400" />
+              <span>{selectedRepo}</span>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+          </>
+        )}
+
+        {currentView === 'profile' && (
+          <>
+            <span className="text-slate-400">Settings</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+          </>
+        )}
+
+        <span className="text-white font-semibold text-[14px]">
+          {getBreadcrumbTitle()}
+        </span>
+      </div>
+
+      {/* Right controls */}
+      <div className="flex items-center gap-3">
+        {/* Repository selector */}
+        {currentView !== 'projects' && currentView !== 'profile' && currentView !== 'create-project' && currentView !== 'connect-repo' && (
+          <select
+            value={selectedRepo}
+            onChange={(e) => onSelectRepo(e.target.value)}
+            className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            <option value="core-api-service">core-api-service (main)</option>
+            <option value="payment-gateway">payment-gateway (staging)</option>
+            <option value="auth-microservice">auth-microservice (main)</option>
+            <option value="notification-service">notification-service (develop)</option>
+            <option value="data-pipeline">data-pipeline (main)</option>
+          </select>
+        )}
+
+        <button 
+          onClick={() => onNavigate('profile')}
+          className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/60 transition-colors relative cursor-pointer"
+          title="Notifications"
+        >
+          <Bell className="w-4 h-4" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-[#0c1022]"></span>
+        </button>
+
+        <button
+          onClick={() => onNavigate('profile')}
+          className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-xs flex items-center justify-center hover:ring-2 hover:ring-indigo-400 transition-all cursor-pointer"
+          title={`View profile (${currentUser?.fullName || 'User'})`}
+        >
+          {initials}
+        </button>
+      </div>
+    </header>
+  );
+};
