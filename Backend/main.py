@@ -30,7 +30,9 @@ from Backend.auth.router import router as auth_router
 from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
 from Backend.routers.data_sync_router import router as data_sync_router
+from Backend.routers.metric_router import router as metric_router
 from Backend.routers.project_router import router as project_router
+from Backend.routers.repository_router import router as repository_router
 from Backend.routers.threshold_router import router as threshold_router
 
 
@@ -140,9 +142,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # Middleware
 # ---------------------------------------------------------------------------
 
-# Read allowed origins from environment — default to localhost for development.
+# Read allowed origins from environment — default to localhost frontend ports for development.
 # In production set: CORS_ALLOWED_ORIGINS=https://yourfrontend.com
-_raw_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+_default_origins = "http://localhost:5173,http://localhost:3000,http://localhost:5000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+_raw_origins = os.environ.get("CORS_ALLOWED_ORIGINS", _default_origins)
 _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
@@ -157,10 +160,15 @@ app.add_middleware(
 # Routers
 # ---------------------------------------------------------------------------
 
+# Auth router mounted at both /auth and /api/auth for unified frontend/test compatibility
 app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api")
+
 app.include_router(project_router)
+app.include_router(repository_router)
 app.include_router(data_sync_router)
 app.include_router(threshold_router)
+app.include_router(metric_router)
 
 
 # ---------------------------------------------------------------------------

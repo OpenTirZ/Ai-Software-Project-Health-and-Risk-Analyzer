@@ -113,7 +113,7 @@ MOCK_PROJECT = {
     "githubRepoUrl": "https://github.com/example/health-analyzer",
     "ownerId": OWNER_ID,
     "members": [{"userId": MEMBER_ID, "role": "member"}],
-    "lastSyncedAt": (NOW - timedelta(hours=2)).isoformat(),
+    "lastSyncedAt": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
 }
 
 
