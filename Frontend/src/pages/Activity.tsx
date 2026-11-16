@@ -1,328 +1,387 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PageView, ActivityTab } from '../types';
-import { commitsData, pullRequestsData, issuesData } from '../data/mockData';
-import { 
-  GitCommit, 
-  GitPullRequest, 
-  AlertCircle, 
-  Search, 
-  FileCode2 
+import {
+  dataSyncApi,
+  type ProjectResponse,
+} from '../services/api';
+import {
+  GitCommit,
+  GitPullRequest,
+  AlertCircle,
+  Search,
+  RefreshCw,
+  Clock,
+  ArrowLeft,
+  ExternalLink,
+  CheckCircle2,
+  Tag,
 } from 'lucide-react';
 
 interface ActivityProps {
-  selectedRepo: string;
+  project: ProjectResponse | null;
   onNavigate: (view: PageView) => void;
 }
 
-export const Activity: React.FC<ActivityProps> = ({ selectedRepo }) => {
+export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<ActivityTab>('commits');
+  const [commits, setCommits] = useState<any[]>([]);
+  const [prs, setPrs] = useState<any[]>([]);
+  const [issues, setIssues] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const loadTabData = async (projectId: string, tab: ActivityTab) => {
+    setIsLoading(true);
+    try {
+      if (tab === 'commits') {
+        const data = await dataSyncApi.getCommits(projectId, 100);
+        setCommits(Array.isArray(data) ? data : []);
+      } else if (tab === 'pull-requests') {
+        const data = await dataSyncApi.getPRs(projectId);
+        setPrs(Array.isArray(data) ? data : []);
+      } else if (tab === 'issues') {
+        const data = await dataSyncApi.getIssues(projectId);
+        setIssues(Array.isArray(data) ? data : []);
+      }
+    } catch (err: any) {
+      console.warn(`Could not load ${tab}:`, err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (project?.id) {
+      loadTabData(project.id, activeTab);
+    }
+  }, [project?.id, activeTab]);
+
+  const handleSyncCurrent = async () => {
+    if (!project?.id) return;
+    setIsSyncing(true);
+    setSyncFeedback(`Syncing latest ${activeTab} from GitHub...`);
+    try {
+      if (activeTab === 'commits') {
+        await dataSyncApi.syncCommits(project.id, project.default_branch || 'main');
+        setSyncFeedback('Commits synchronized successfully!');
+      } else if (activeTab === 'pull-requests') {
+        await dataSyncApi.syncPRs(project.id);
+        setSyncFeedback('Pull Requests synchronized successfully!');
+      } else if (activeTab === 'issues') {
+        await dataSyncApi.syncIssues(project.id);
+        setSyncFeedback('Issues synchronized successfully!');
+      }
+      await loadTabData(project.id, activeTab);
+      setTimeout(() => setSyncFeedback(null), 3500);
+    } catch (err: any) {
+      setSyncFeedback(`Sync note: ${err.message || 'Synchronization failed.'}`);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  if (!project) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
+        <p className="text-slate-500">Please select an active project to view activity telemetry.</p>
+        <button
+          onClick={() => onNavigate('projects')}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
+        >
+          View Projects
+        </button>
+      </div>
+    );
+  }
+
+  // Filter items
+  const filteredCommits = commits.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    const msg = (c.message || '').toLowerCase();
+    const author = (c.author?.name || c.author_name || '').toLowerCase();
+    const sha = (c.sha || '').toLowerCase();
+    return msg.includes(q) || author.includes(q) || sha.includes(q);
+  });
+
+  const filteredPRs = prs.filter((p) => {
+    const q = searchQuery.toLowerCase();
+    const title = (p.title || '').toLowerCase();
+    const author = (p.author?.login || p.author || '').toLowerCase();
+    const num = String(p.number || p.pr_number || '');
+    return title.includes(q) || author.includes(q) || num.includes(q);
+  });
+
+  const filteredIssues = issues.filter((i) => {
+    const q = searchQuery.toLowerCase();
+    const title = (i.title || '').toLowerCase();
+    const author = (i.author?.login || i.author || '').toLowerCase();
+    const num = String(i.number || i.issue_number || '');
+    return title.includes(q) || author.includes(q) || num.includes(q);
+  });
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-          Project Activity
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Commits, pull requests and issues telemetry for <span className="font-semibold text-slate-700">{selectedRepo}</span>.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <button
+            onClick={() => onNavigate('overview')}
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-medium mb-1 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Project Overview</span>
+          </button>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+            Activity Telemetry
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Raw ingested GitHub telemetry for <span className="font-semibold text-slate-700">{project.name}</span>.
+          </p>
+        </div>
+
+        {/* Sync Current Tab Button */}
+        <button
+          onClick={handleSyncCurrent}
+          disabled={isSyncing}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+          <span>{isSyncing ? 'Synchronizing...' : `Sync ${activeTab.replace('-', ' ').toUpperCase()}`}</span>
+        </button>
       </div>
 
-      {/* Tabs Control */}
-      <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl max-w-md">
-        <button
-          onClick={() => {
-            setActiveTab('commits');
-            setSearchQuery('');
-          }}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'commits'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <GitCommit className="w-3.5 h-3.5" />
-          <span>Commits</span>
-        </button>
+      {syncFeedback && (
+        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 animate-fadeIn">
+          {syncFeedback}
+        </div>
+      )}
 
-        <button
-          onClick={() => {
-            setActiveTab('pull-requests');
-            setSearchQuery('');
-          }}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'pull-requests'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <GitPullRequest className="w-3.5 h-3.5" />
-          <span>Pull Requests</span>
-        </button>
+      {/* Tabs & Search Filter */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* Tabs Control */}
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl max-w-md">
+          <button
+            onClick={() => {
+              setActiveTab('commits');
+              setSearchQuery('');
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'commits'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <GitCommit className="w-3.5 h-3.5" />
+            <span>Commits ({commits.length})</span>
+          </button>
 
-        <button
-          onClick={() => {
-            setActiveTab('issues');
-            setSearchQuery('');
-          }}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'issues'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <AlertCircle className="w-3.5 h-3.5" />
-          <span>Issues</span>
-        </button>
+          <button
+            onClick={() => {
+              setActiveTab('pull-requests');
+              setSearchQuery('');
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'pull-requests'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <GitPullRequest className="w-3.5 h-3.5" />
+            <span>Pull Requests ({prs.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('issues');
+              setSearchQuery('');
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'issues'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>Issues ({issues.length})</span>
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm w-full md:w-80">
+          <Search className="w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={`Search ${activeTab.replace('-', ' ')}...`}
+            className="w-full text-xs text-slate-800 focus:outline-none bg-transparent placeholder:text-slate-400"
+          />
+        </div>
       </div>
 
       {/* COMMITS VIEW */}
       {activeTab === 'commits' && (
-        <div className="space-y-4">
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm">
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="w-4 h-4 text-slate-400 ml-1" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search commits by message, hash, author..."
-                className="w-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
-              />
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+          {filteredCommits.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs space-y-2">
+              <GitCommit className="w-8 h-8 text-slate-300 mx-auto" />
+              <p>No commits found. Click "Sync Commits" above to pull commit history from GitHub.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium px-2 py-1 rounded bg-slate-100 border border-slate-200">
-                Author: All
-              </span>
-              <span className="text-xs text-slate-500 font-medium px-2 py-1 rounded bg-slate-100 border border-slate-200">
-                Branch: main
-              </span>
-            </div>
-          </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredCommits.map((c, i) => {
+                const authorName = c.author?.name || c.author_name || c.author?.login || 'Developer';
+                const dateStr = c.date || c.authored_date || c.created_at;
+                const shortSha = (c.sha || '').substring(0, 7);
 
-          {/* Commits Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-bold uppercase tracking-wider">
-                    <th className="py-4 px-6">Commit</th>
-                    <th className="py-4 px-6">Message</th>
-                    <th className="py-4 px-6">Author</th>
-                    <th className="py-4 px-6">Date</th>
-                    <th className="py-4 px-6 text-right">Files</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {commitsData
-                    .filter((c) =>
-                      c.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      c.hash.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      c.author.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((commit) => (
-                      <tr key={commit.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-4 px-6 font-mono text-xs font-bold text-indigo-600">
-                          <span className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200">
-                            {commit.hash}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 font-medium text-slate-900">
-                          {commit.message}
-                        </td>
-                        <td className="py-4 px-6 text-xs text-slate-600">
-                          {commit.author}
-                        </td>
-                        <td className="py-4 px-6 text-xs text-slate-400">
-                          {commit.date}
-                        </td>
-                        <td className="py-4 px-6 text-right text-xs font-bold text-slate-700">
-                          <span className="inline-flex items-center gap-1">
-                            <FileCode2 className="w-3.5 h-3.5 text-slate-400" />
-                            {commit.files} files
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+                return (
+                  <div key={c._id || c.sha || i} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {c.message || 'Commit with no message'}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
+                        <span className="font-sans font-medium text-slate-700">{authorName}</span>
+                        <span>•</span>
+                        <span>{dateStr ? new Date(dateStr).toLocaleString() : 'N/A'}</span>
+                        {c.branch && (
+                          <>
+                            <span>•</span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">
+                              {c.branch}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className="px-2 py-1 rounded bg-slate-100 border border-slate-200 text-xs font-mono text-slate-700">
+                        {shortSha}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* PULL REQUESTS VIEW */}
       {activeTab === 'pull-requests' && (
-        <div className="space-y-4">
-          {/* Summary status pill bar */}
-          <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Pull Requests Overview
-              </h2>
-              <p className="text-xs text-slate-500">
-                Open review queue and turnaround velocities
-              </p>
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+          {filteredPRs.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs space-y-2">
+              <GitPullRequest className="w-8 h-8 text-slate-300 mx-auto" />
+              <p>No pull requests found. Click "Sync Pull Requests" to ingest PR telemetry.</p>
             </div>
-            <div className="flex items-center gap-2 text-xs font-bold">
-              <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                12 Open
-              </span>
-              <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                7 Merged
-              </span>
-              <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                2 Closed
-              </span>
-            </div>
-          </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredPRs.map((p, i) => {
+                const state = String(p.state || 'open').toLowerCase();
+                const badgeColor =
+                  state === 'merged'
+                    ? 'text-purple-700 bg-purple-50 border-purple-200'
+                    : state === 'closed'
+                    ? 'text-rose-700 bg-rose-50 border-rose-200'
+                    : 'text-emerald-700 bg-emerald-50 border-emerald-200';
 
-          {/* PR Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-bold uppercase tracking-wider">
-                    <th className="py-4 px-6">PR #</th>
-                    <th className="py-4 px-6">Title</th>
-                    <th className="py-4 px-6">Author</th>
-                    <th className="py-4 px-6">Age</th>
-                    <th className="py-4 px-6 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {pullRequestsData.map((pr) => (
-                    <tr key={pr.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-4 px-6 font-mono text-xs font-bold text-indigo-600">
-                        #{pr.prNumber}
-                      </td>
-                      <td className="py-4 px-6 font-medium text-slate-900">
-                        {pr.title}
-                      </td>
-                      <td className="py-4 px-6 text-xs text-slate-600">
-                        {pr.author}
-                      </td>
-                      <td className="py-4 px-6 text-xs font-mono">
-                        <span className={`px-2 py-0.5 rounded ${
-                          parseInt(pr.age) >= 48 ? 'bg-rose-50 text-rose-700 font-bold' : 'text-slate-600'
-                        }`}>
-                          {pr.age}
+                return (
+                  <div key={p._id || p.number || i} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-slate-500">
+                          #{p.number || p.pr_number}
                         </span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            pr.status === 'Open'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : pr.status === 'Merged'
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}
-                        >
-                          {pr.status}
+                        <h4 className="text-sm font-semibold text-slate-900">
+                          {p.title}
+                        </h4>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${badgeColor}`}>
+                          {state}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Author: <span className="font-medium text-slate-700">{p.author?.login || p.author || 'contributor'}</span>
+                        {' '}&bull; Created: {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+
+                    {p.html_url && (
+                      <a
+                        href={p.html_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+                      >
+                        <span>GitHub</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* ISSUES VIEW */}
       {activeTab === 'issues' && (
-        <div className="space-y-4">
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm">
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="w-4 h-4 text-slate-400 ml-1" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search issues by title or author..."
-                className="w-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
-              />
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+          {filteredIssues.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs space-y-2">
+              <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
+              <p>No issues found. Click "Sync Issues" to pull issue records from GitHub.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium px-2 py-1 rounded bg-slate-100 border border-slate-200">
-                Status: All ▼
-              </span>
-              <span className="text-xs text-slate-500 font-medium px-2 py-1 rounded bg-slate-100 border border-slate-200">
-                Priority: All ▼
-              </span>
-            </div>
-          </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredIssues.map((issue, i) => {
+                const state = String(issue.state || 'open').toLowerCase();
+                const badgeColor =
+                  state === 'closed'
+                    ? 'text-slate-600 bg-slate-100 border-slate-200'
+                    : 'text-emerald-700 bg-emerald-50 border-emerald-200';
 
-          {/* Issues Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-bold uppercase tracking-wider">
-                    <th className="py-4 px-6">Issue</th>
-                    <th className="py-4 px-6">Title</th>
-                    <th className="py-4 px-6">Author</th>
-                    <th className="py-4 px-6">Priority</th>
-                    <th className="py-4 px-6">Status</th>
-                    <th className="py-4 px-6 text-right">Updated</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {issuesData
-                    .filter((is) =>
-                      is.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      is.author.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((issue) => (
-                      <tr key={issue.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-4 px-6 font-mono text-xs font-bold text-indigo-600">
-                          #{issue.issueNumber}
-                        </td>
-                        <td className="py-4 px-6 font-medium text-slate-900">
+                return (
+                  <div key={issue._id || issue.number || i} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-slate-500">
+                          #{issue.number || issue.issue_number}
+                        </span>
+                        <h4 className="text-sm font-semibold text-slate-900">
                           {issue.title}
-                        </td>
-                        <td className="py-4 px-6 text-xs text-slate-600">
-                          {issue.author}
-                        </td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              issue.priority === 'High'
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : issue.priority === 'Medium'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            {issue.priority}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              issue.status === 'Open'
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}
-                          >
-                            {issue.status}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-right text-xs text-slate-400">
-                          {issue.updated}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+                        </h4>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${badgeColor}`}>
+                          {state}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Author: <span className="font-medium text-slate-700">{issue.author?.login || issue.author || 'user'}</span>
+                        {' '}&bull; Last updated: {issue.updated_at ? new Date(issue.updated_at).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+
+                    {issue.html_url && (
+                      <a
+                        href={issue.html_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+                      >
+                        <span>GitHub</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

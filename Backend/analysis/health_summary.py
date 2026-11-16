@@ -218,14 +218,19 @@ def compute_workload_indicator(
 
     if commits:
         for c in commits:
-            author = c.get("author") or {}
-            author_key = (
-                author.get("name")
-                or author.get("login")
-                or author.get("email")
-                or c.get("author_name")
-                or "Unknown"
-            )
+            author = c.get("author")
+            if isinstance(author, dict):
+                author_key = (
+                    author.get("name")
+                    or author.get("login")
+                    or author.get("email")
+                    or c.get("author_name")
+                    or "Unknown"
+                )
+            elif isinstance(author, str) and author.strip():
+                author_key = author.strip()
+            else:
+                author_key = c.get("author_name") or "Unknown"
             contribution_counts[author_key] = contribution_counts.get(author_key, 0) + 1
     elif contributors:
         for contrib in contributors:

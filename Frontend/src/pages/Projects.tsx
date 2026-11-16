@@ -1,262 +1,209 @@
 import React, { useState } from 'react';
-import type { PageView, Repository } from '../types';
-import { Search, Plus, GitBranch, ShieldCheck, AlertTriangle, ArrowRight } from 'lucide-react';
+import type { PageView } from '../types';
+import type { ProjectResponse } from '../services/api';
+import { Search, Plus, GitBranch, ArrowRight, Layers, ExternalLink, RefreshCw } from 'lucide-react';
 
 interface ProjectsProps {
-  repositories: Repository[];
-  onSelectRepo: (repo: string) => void;
+  projects: ProjectResponse[];
+  onSelectProject: (projectId: string) => void;
   onNavigate: (view: PageView) => void;
+  onRefreshProjects?: () => void;
 }
 
 export const Projects: React.FC<ProjectsProps> = ({
-  repositories,
-  onSelectRepo,
+  projects = [],
+  onSelectProject,
   onNavigate,
+  onRefreshProjects,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredRepos = repositories.filter(
-    (repo) =>
-      repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      repo.branch.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProjects = projects.filter((p) => {
+    const q = searchTerm.toLowerCase();
+    const name = (p.name || '').toLowerCase();
+    const desc = (p.description || '').toLowerCase();
+    const repo = (p.repo_url || '').toLowerCase();
+    return name.includes(q) || desc.includes(q) || repo.includes(q);
+  });
 
-  const getRiskBadge = (risk: Repository['riskClassification']) => {
-    switch (risk) {
-      case 'LOW RISK':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            LOW RISK
-          </span>
-        );
-      case 'ELEVATED CHURN':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-            ELEVATED CHURN
-          </span>
-        );
-      case 'HIGH RISK':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-            HIGH RISK
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-            {risk}
-          </span>
-        );
-    }
-  };
-
-  const getHealthScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-600';
-    if (score >= 60) return 'text-amber-500';
-    return 'text-rose-600';
-  };
-
-  const getProgressColor = (score: number) => {
-    if (score >= 80) return 'bg-emerald-500';
-    if (score >= 60) return 'bg-amber-500';
-    return 'bg-rose-500';
-  };
+  const connectedCount = projects.filter((p) => Boolean(p.repo_url)).length;
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Top Banner & KPI Cards */}
+      {/* Top Banner & Actions */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-            All Repositories
+            Projects & Repositories
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Monitor automated health checks, git branch risks, and software quality audits.
           </p>
         </div>
 
-        {/* Connect New Repository Button */}
-        <button
-          onClick={() => onNavigate('create-project')}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[10px] text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 transition-all hover:opacity-95 active:scale-95 cursor-pointer"
-          style={{
-            background: 'linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%), linear-gradient(90deg, rgb(99, 102, 241) 0%, rgb(168, 85, 247) 100%)',
-          }}
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Connect New</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {onRefreshProjects && (
+            <button
+              onClick={onRefreshProjects}
+              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-50 shadow-sm transition-all cursor-pointer"
+              title="Refresh projects list"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
+
+          <button
+            onClick={() => onNavigate('create-project')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md shadow-indigo-600/20 bg-indigo-600 hover:bg-indigo-700 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Create New Project</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {/* TOTAL REPOSITORIES */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-              TOTAL REPOSITORIES
-            </span>
-            <GitBranch className="w-4 h-4 text-indigo-500" />
-          </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-bold text-slate-900">
-              8 Active
-            </span>
-            <span className="inline-flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-              100% Monitored
-            </span>
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-sm">
+          <p className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">
+            TOTAL PROJECTS
+          </p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">{projects.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Configured in workspace</p>
         </div>
 
-        {/* AVERAGE HEALTH SCORE */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-              AVERAGE HEALTH SCORE
-            </span>
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-3xl font-bold text-slate-900">
-              84.6 <span className="text-sm font-normal text-slate-400">/ 100</span>
-            </span>
-            <span className="inline-flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-              +3.1% ↑
-            </span>
-          </div>
+        <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-sm">
+          <p className="text-[11px] font-extrabold uppercase text-indigo-500 tracking-wider">
+            CONNECTED REPOSITORIES
+          </p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">{connectedCount}</p>
+          <p className="text-xs text-slate-500 mt-1">GitHub integration active</p>
         </div>
 
-        {/* SECURITY & RISK STATUS */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-              RISK CLASSIFICATIONS
-            </span>
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-slate-900">3</span>
-              <span className="text-xs text-slate-500">Flags Raised</span>
-            </div>
-            <button
-              onClick={() => onNavigate('risk-analysis')}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
-            >
-              Review Risks →
-            </button>
-          </div>
+        <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-sm">
+          <p className="text-[11px] font-extrabold uppercase text-emerald-500 tracking-wider">
+            HEALTH STATUS
+          </p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">Active</p>
+          <p className="text-xs text-slate-500 mt-1">Deterministic risk engine ready</p>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-xl p-3 border border-slate-200/90 shadow-sm flex items-center gap-3">
-        <Search className="w-5 h-5 text-slate-400 ml-2" />
+      {/* Search Input */}
+      <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-slate-200/90 shadow-sm">
+        <Search className="w-4 h-4 text-slate-400 shrink-0" />
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search Project, repositories, branches..."
-          className="w-full text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
+          placeholder="Search projects by name, description, or repository URL..."
+          className="w-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
         />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="text-xs text-slate-400 hover:text-slate-600 px-2 cursor-pointer"
-          >
-            Clear
-          </button>
-        )}
       </div>
 
-      {/* Repositories Table */}
-      <div className="bg-white rounded-xl border border-slate-200/90 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-bold uppercase tracking-wider">
-                <th className="py-4 px-6">PROJECT NAME</th>
-                <th className="py-4 px-6">BRANCH</th>
-                <th className="py-4 px-6">AI HEALTH SCORE</th>
-                <th className="py-4 px-6">RISK CLASSIFICATION</th>
-                <th className="py-4 px-6">LAST AUDIT</th>
-                <th className="py-4 px-6 text-right">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              {filteredRepos.length > 0 ? (
-                filteredRepos.map((repo) => (
-                  <tr
-                    key={repo.id}
-                    onClick={() => {
-                      onSelectRepo(repo.name);
-                      onNavigate('overview');
-                    }}
-                    className="hover:bg-indigo-50/40 transition-colors cursor-pointer group"
-                  >
-                    <td className="py-4 px-6">
-                      <div className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                        {repo.name}
-                      </div>
-                      {repo.description && (
-                        <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
-                          {repo.description}
-                        </p>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 font-mono text-xs text-slate-600">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                        {repo.branch}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-24 bg-slate-100 h-2 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${getProgressColor(repo.healthScore)}`}
-                            style={{ width: `${repo.healthScore}%` }}
-                          />
-                        </div>
-                        <span className={`font-bold text-xs ${getHealthScoreColor(repo.healthScore)}`}>
-                          {repo.healthScore}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      {getRiskBadge(repo.riskClassification)}
-                    </td>
-                    <td className="py-4 px-6 text-slate-500 text-xs">
-                      {repo.lastAudit}
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectRepo(repo.name);
-                          onNavigate('overview');
-                        }}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:text-indigo-900 group-hover:translate-x-0.5 transition-all cursor-pointer"
-                      >
-                        <span>View Audit</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400 text-sm">
-                    No repositories matched your search query.
-                  </td>
+      {/* Projects List Card */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+        {filteredProjects.length === 0 ? (
+          <div className="p-14 text-center space-y-4">
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                {projects.length === 0 ? 'No Projects Found' : 'No Matching Projects'}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                {projects.length === 0
+                  ? 'Get started by creating your first project and linking your GitHub repository.'
+                  : 'Try adjusting your search query.'}
+              </p>
+            </div>
+            {projects.length === 0 && (
+              <button
+                onClick={() => onNavigate('create-project')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
+              >
+                <span>+ Create Your First Project</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                  <th className="py-4 px-6">Project Name</th>
+                  <th className="py-4 px-6">GitHub Repository</th>
+                  <th className="py-4 px-6">Default Branch</th>
+                  <th className="py-4 px-6">Created</th>
+                  <th className="py-4 px-6 text-right">Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {filteredProjects.map((project) => {
+                  return (
+                    <tr
+                      key={project.id}
+                      onClick={() => {
+                        onSelectProject(project.id);
+                        onNavigate('overview');
+                      }}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                    >
+                      <td className="py-4 px-6">
+                        <div className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          {project.name}
+                        </div>
+                        {project.description && (
+                          <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
+                            {project.description}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-6">
+                        {project.repo_url ? (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-700 font-mono">
+                            <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>{project.repo_url.replace(/^https:\/\/github\.com\//, '')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">
+                            Not connected
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-6 font-mono text-xs text-slate-600">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                          {project.default_branch || 'main'}
+                        </span>
+                      </td>
+
+                      <td className="py-4 px-6 text-slate-500 text-xs">
+                        {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Recent'}
+                      </td>
+
+                      <td className="py-4 px-6 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectProject(project.id);
+                            onNavigate('overview');
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          <span>Open Overview</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
