@@ -235,7 +235,7 @@ def sync_contributors(
     project_id: str,
     request: SyncContributorsRequest,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
     """
@@ -281,7 +281,7 @@ def sync_commits(
     project_id: str,
     request: SyncCommitsRequest,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
     """
@@ -349,7 +349,7 @@ def sync_issues(
     project_id: str,
     request: Optional[SyncIssuesRequest] = None,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
     """
@@ -453,7 +453,7 @@ def sync_prs(
     project_id: str,
     request: Optional[SyncPRsRequest] = None,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
     """
@@ -547,7 +547,7 @@ def sync_milestones(
     project_id: str,
     request: Optional[SyncMilestonesRequest] = None,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
     """
