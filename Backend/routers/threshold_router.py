@@ -46,22 +46,15 @@ def _is_user_authorized_for_threshold_update(project: dict, current_user: dict) 
     raw_role = current_user.get("role", "")
     normalized_sys_role = normalize_role(raw_role)
 
-    # 1. Global Admin
+    # 1. System Admin has global cross-project authority
     if normalized_sys_role == Role.ADMIN.value or raw_role.strip().lower() == "admin":
         return True
 
-    # 2. Global Lead / Project Manager
-    if (
-        normalized_sys_role == Role.PROJECT_MANAGER.value
-        or raw_role.strip().lower() in {"project_manager", "lead"}
-    ):
-        return True
-
-    # 3. Project Owner (creator)
+    # 2. Project Owner (creator)
     if _is_project_owner(project, user_id):
         return True
 
-    # 4. Project Member with designated owner or lead role
+    # 3. Project Member with designated owner, lead, or PM role on THIS project
     members = project.get("members", [])
     if isinstance(members, list):
         for m in members:

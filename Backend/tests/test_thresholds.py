@@ -37,6 +37,13 @@ def _mock_mongo_factory(*args, **kwargs):
 pymongo.MongoClient = _mock_mongo_factory
 
 import pytest
+
+
+@pytest.fixture(autouse=True, scope="module")
+def isolate_mongo_client():
+    with patch("pymongo.MongoClient", side_effect=_mock_mongo_factory):
+        yield
+    pymongo.MongoClient = _original_mongo_client
 from bson import ObjectId
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -99,6 +106,13 @@ OUTSIDER_USER = {
     "email": "outsider@example.com",
     "name": "Outsider",
     "role": "developer",
+}
+
+OUTSIDER_PM_USER = {
+    "_id": OUTSIDER_USER_ID,
+    "email": "outsider_pm@example.com",
+    "name": "Outsider Project Manager",
+    "role": "project_manager",
 }
 
 VALID_PROJECT_ID = str(ObjectId())
@@ -178,7 +192,10 @@ class TestThresholdSchemas:
 
     def test_workload_imbalance_ratio_bounds(self):
         with pytest.raises(ValidationError):
-            ThresholdConfig(workload_imbalance_ratio=1.0)  # Must be strictly > 1.0
+            ThresholdConfig(workload_imbalance_ratio=1.0)  # Must be >= 1.01
+
+        with pytest.raises(ValidationError):
+            ThresholdConfig(workload_imbalance_ratio=1.001)  # Sub-minimum decimal
 
         with pytest.raises(ValidationError):
             ThresholdConfig(workload_imbalance_ratio=0.5)
@@ -192,6 +209,9 @@ class TestThresholdSchemas:
     def test_bus_factor_threshold_bounds(self):
         with pytest.raises(ValidationError):
             ThresholdConfig(bus_factor_threshold=0.0)
+
+        with pytest.raises(ValidationError):
+            ThresholdConfig(bus_factor_threshold=0.001)  # Sub-minimum decimal
 
         with pytest.raises(ValidationError):
             ThresholdConfig(bus_factor_threshold=1.5)
@@ -213,6 +233,12 @@ class TestThresholdSchemas:
 
         with pytest.raises(ValidationError):
             UpdateThresholdsRequest(workload_imbalance_ratio=0.9)
+
+        with pytest.raises(ValidationError):
+            UpdateThresholdsRequest(workload_imbalance_ratio=1.001)
+
+        with pytest.raises(ValidationError):
+            UpdateThresholdsRequest(bus_factor_threshold=0.001)
 
 
 # ===========================================================================
@@ -337,6 +363,18 @@ class TestUpdateProjectThresholds:
         assert response.status_code == 403
         assert "Only project owners, admins, or leads can update thresholds" in response.json()["detail"]
 
+    @patch("Backend.routers.threshold_router.get_project")
+    def test_outsider_project_manager_forbidden_from_updating_403(self, mock_get_project):
+        mock_get_project.return_value = BASE_PROJECT_DOC
+        app.dependency_overrides[get_current_user] = lambda: OUTSIDER_PM_USER
+
+        response = client.put(
+            f"/api/projects/{VALID_PROJECT_ID}/thresholds",
+            json={"stale_pr_hours": 60},
+        )
+        assert response.status_code == 403
+        assert "Only project owners, admins, or leads can update thresholds" in response.json()["detail"]
+
     @patch("Backend.routers.threshold_router.update_project")
     @patch("Backend.routers.threshold_router.get_project")
     def test_project_owner_successfully_updates_thresholds(
@@ -419,6 +457,32 @@ class TestUpdateProjectThresholds:
         response = client.put(
             f"/api/projects/{VALID_PROJECT_ID}/thresholds",
             json={"workload_imbalance_ratio": 0.8},
+        )
+        assert response.status_code == 422
+        error_detail = response.json().get("detail", [])
+        assert any("workload_imbalance_ratio" in str(err.get("loc", [])) for err in error_detail)
+
+    @patch("Backend.routers.threshold_router.get_project")
+    def test_validation_error_on_subminimum_bus_factor_decimal_returns_422(self, mock_get_project):
+        mock_get_project.return_value = BASE_PROJECT_DOC
+        app.dependency_overrides[get_current_user] = lambda: OWNER_USER
+
+        response = client.put(
+            f"/api/projects/{VALID_PROJECT_ID}/thresholds",
+            json={"bus_factor_threshold": 0.001},
+        )
+        assert response.status_code == 422
+        error_detail = response.json().get("detail", [])
+        assert any("bus_factor_threshold" in str(err.get("loc", [])) for err in error_detail)
+
+    @patch("Backend.routers.threshold_router.get_project")
+    def test_validation_error_on_subminimum_workload_ratio_decimal_returns_422(self, mock_get_project):
+        mock_get_project.return_value = BASE_PROJECT_DOC
+        app.dependency_overrides[get_current_user] = lambda: OWNER_USER
+
+        response = client.put(
+            f"/api/projects/{VALID_PROJECT_ID}/thresholds",
+            json={"workload_imbalance_ratio": 1.001},
         )
         assert response.status_code == 422
         error_detail = response.json().get("detail", [])
