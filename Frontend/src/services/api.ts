@@ -745,3 +745,237 @@ export const repositoryApi = {
     return { branches: ['main', 'master', 'develop', 'staging', 'production'], source: 'default' };
   },
 };
+
+// ===========================================================================
+// 4. METRICS & HEALTH API (/api/projects/:id/health-summary, breakdown)
+// ===========================================================================
+export interface HealthSummaryData {
+  project_id: string;
+  project_name: string;
+  health_score: number | null;
+  status: 'Good' | 'Caution' | 'At Risk' | 'Insufficient Data';
+  last_synced_at: string | null;
+  data_freshness: 'fresh' | 'stale' | 'unknown';
+  data_availability: Record<string, string>;
+  summary_statement: string;
+  flags_count: {
+    total: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  active_flags: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    message: string;
+    evidence?: any;
+  }>;
+  evaluated_at: string;
+}
+
+export interface IndicatorDetail {
+  score: number | null;
+  status: string;
+  data_status: string;
+  weight: number;
+  details: Record<string, any>;
+  flags: Array<any>;
+}
+
+export interface MetricsBreakdownData {
+  project_id: string;
+  project_name: string;
+  health_score: number | null;
+  status: string;
+  evaluated_at: string;
+  weights_used: Record<string, number>;
+  indicators: {
+    bottlenecks: IndicatorDetail;
+    workload: IndicatorDetail;
+    stale_issues: IndicatorDetail;
+    schedule_risk: IndicatorDetail;
+  };
+}
+
+export const metricsApi = {
+  async getHealthSummary(projectId: string): Promise<HealthSummaryData> {
+    const token = localStorage.getItem('aegis_token');
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/health-summary`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch health summary (${response.status})`));
+    }
+
+    return response.json();
+  },
+
+  async getMetricsBreakdown(projectId: string): Promise<MetricsBreakdownData> {
+    const token = localStorage.getItem('aegis_token');
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/metrics/breakdown`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch metrics breakdown (${response.status})`));
+    }
+
+    return response.json();
+  },
+};
+
+// ===========================================================================
+// 5. DATA SYNC & TELEMETRY API (Commits, Contribs, PRs, Issues, Milestones)
+// ===========================================================================
+export const dataSyncApi = {
+  async getContributors(projectId: string): Promise<any[]> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/contributors`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch contributors (${res.status})`);
+    return res.json();
+  },
+
+  async syncContributors(projectId: string): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-contributors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`Failed to sync contributors (${res.status})`);
+    return res.json();
+  },
+
+  async getCommits(projectId: string, limit = 50): Promise<any[]> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/commits?limit=${limit}`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch commits (${res.status})`);
+    return res.json();
+  },
+
+  async syncCommits(projectId: string, branch = 'main', maxCommits = 100): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-commits`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ branch, max_commits: maxCommits }),
+    });
+    if (!res.ok) throw new Error(`Failed to sync commits (${res.status})`);
+    return res.json();
+  },
+
+  async getPRs(projectId: string, state = 'all'): Promise<any[]> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/prs?state=${state}`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch pull requests (${res.status})`);
+    return res.json();
+  },
+
+  async syncPRs(projectId: string): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-prs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`Failed to sync pull requests (${res.status})`);
+    return res.json();
+  },
+
+  async getIssues(projectId: string, state = 'all'): Promise<any[]> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/issues?state=${state}`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch issues (${res.status})`);
+    return res.json();
+  },
+
+  async syncIssues(projectId: string): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-issues`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`Failed to sync issues (${res.status})`);
+    return res.json();
+  },
+
+  async getMilestones(projectId: string): Promise<any[]> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/milestones`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch milestones (${res.status})`);
+    return res.json();
+  },
+
+  async syncMilestones(projectId: string): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-milestones`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`Failed to sync milestones (${res.status})`);
+    return res.json();
+  },
+};
+
+// ===========================================================================
+// 6. THRESHOLDS CONFIGURATION API (/api/projects/:id/thresholds)
+// ===========================================================================
+export const thresholdApi = {
+  async getThresholds(projectId: string): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/thresholds`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch thresholds (${res.status})`);
+    return res.json();
+  },
+
+  async updateThresholds(projectId: string, thresholds: Record<string, any>): Promise<any> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/thresholds`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(thresholds),
+    });
+    if (!res.ok) throw new Error(`Failed to update thresholds (${res.status})`);
+    return res.json();
+  },
+};

@@ -634,11 +634,14 @@ def build_health_summary(
     issues: Optional[List[Dict[str, Any]]] = None,
     sprints: Optional[List[Dict[str, Any]]] = None,
     thresholds: Optional[Dict[str, Any]] = None,
+    now: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Construct high-level health summary response for a project.
     Matches GET /api/projects/{id}/health-summary specification.
     """
+    current_time = now or datetime.now(timezone.utc)
+
     # Extract project settings thresholds if available
     merged_thresholds = {
         **DEFAULT_THRESHOLDS,
@@ -646,10 +649,10 @@ def build_health_summary(
         **(thresholds or {}),
     }
 
-    bottlenecks = compute_bottlenecks_indicator(pull_requests, merged_thresholds)
+    bottlenecks = compute_bottlenecks_indicator(pull_requests, merged_thresholds, now=current_time)
     workload = compute_workload_indicator(commits, contributors, merged_thresholds)
-    stale_issues = compute_stale_issues_indicator(issues, merged_thresholds)
-    schedule_risk = compute_schedule_risk_indicator(sprints=sprints, issues=issues, thresholds=merged_thresholds)
+    stale_issues = compute_stale_issues_indicator(issues, merged_thresholds, now=current_time)
+    schedule_risk = compute_schedule_risk_indicator(sprints=sprints, issues=issues, thresholds=merged_thresholds, now=current_time)
 
     composite = aggregate_health_score(bottlenecks, workload, stale_issues, schedule_risk)
 
@@ -661,8 +664,7 @@ def build_health_summary(
     )
     last_synced_dt = _parse_datetime(last_synced_at)
     if last_synced_dt:
-        now = datetime.now(timezone.utc)
-        freshness = "fresh" if (now - last_synced_dt).total_seconds() < 86400 else "stale"
+        freshness = "fresh" if (current_time - last_synced_dt).total_seconds() < 86400 else "stale"
         last_synced_str = last_synced_dt.isoformat()
     else:
         freshness = "unknown"

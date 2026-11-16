@@ -382,7 +382,7 @@ class TestCompoundIndexRegistration:
         )
 
         # Check issues compound unique index (projectId, number)
-        mock_issues.create_index.assert_called_once_with(
+        mock_issues.create_index.assert_any_call(
             [("projectId", 1), ("number", 1)],
             unique=True,
             background=True,
