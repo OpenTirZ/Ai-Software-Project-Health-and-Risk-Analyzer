@@ -55,5 +55,31 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  report-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: project-health-backend:latest
+    container_name: ai_health_report_worker
+    restart: unless-stopped
+    command: ["python", "-m", "Backend.reporting.scheduler"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/project_health}
+      - MONGO_DATABASE=${MONGO_DATABASE:-project_health}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - SCHEDULER_POLL_INTERVAL=60
+    depends_on:
+      backend:
+        condition: service_healthy
+        required: false
+      mongodb:
+        condition: service_started
+        required: false
+
 volumes:
   mongo_data:
