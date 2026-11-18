@@ -197,6 +197,64 @@ class TestValidateAndNormalize:
         assert state["normalized_commits"][0]["timestamp"] == "1970-01-01T00:00:00+00:00"
         assert state["normalized_commits"][1]["timestamp"] == "2026-11-01T00:00:00+00:00"
 
+    def test_pr_reviews_integer_reviews_without_count(self):
+        """Malformed integer reviews with reviews_count absent normalizes to [] and derives reviews_count 0."""
+        state = validate_and_normalize_node(
+            {"pull_requests": [{"number": 1, "reviews": 5}], "as_of": AS_OF}
+        )
+        pr = state["normalized_pull_requests"][0]
+        assert pr["reviews"] == []
+        assert pr["reviews_count"] == 0
+
+    def test_pr_reviews_integer_reviews_with_explicit_count(self):
+        """Malformed integer reviews with reviews_count explicitly present normalizes reviews to [] and preserves count."""
+        state = validate_and_normalize_node(
+            {"pull_requests": [{"number": 2, "reviews": 3, "reviews_count": 4}], "as_of": AS_OF}
+        )
+        pr = state["normalized_pull_requests"][0]
+        assert pr["reviews"] == []
+        assert pr["reviews_count"] == 4
+
+    def test_pr_reviews_non_list_string_null_and_dict(self):
+        """String, null, and dictionary reviews normalize to [] without throwing exceptions."""
+        prs = [
+            {"number": 10, "reviews": "two reviews"},
+            {"number": 11, "reviews": None},
+            {"number": 12, "reviews": {"reviewer": "alice", "state": "APPROVED"}},
+            {"number": 13, "reviews": "malformed", "reviews_count": 2},
+        ]
+        state = validate_and_normalize_node({"pull_requests": prs, "as_of": AS_OF})
+        for pr in state["normalized_pull_requests"]:
+            assert pr["reviews"] == []
+        norm = {p["number"]: p for p in state["normalized_pull_requests"]}
+        assert norm[10]["reviews_count"] == 0
+        assert norm[11]["reviews_count"] == 0
+        assert norm[12]["reviews_count"] == 0
+        assert norm[13]["reviews_count"] == 2
+
+    def test_pr_reviews_valid_list_without_count(self):
+        """Valid reviews list with no explicit count preserves reviews and derives reviews_count."""
+        raw_reviews = [
+            {"submitted_at": "2026-11-02T10:00:00Z"},
+            {"submitted_at": "2026-11-03T10:00:00Z"},
+        ]
+        state = validate_and_normalize_node(
+            {"pull_requests": [{"number": 20, "reviews": raw_reviews}], "as_of": AS_OF}
+        )
+        pr = state["normalized_pull_requests"][0]
+        assert pr["reviews"] == raw_reviews
+        assert pr["reviews_count"] == 2
+
+    def test_pr_reviews_valid_list_with_explicit_count(self):
+        """Valid reviews list with an explicit count preserves reviews and preserves explicit count."""
+        raw_reviews = [{"submitted_at": "2026-11-02T10:00:00Z"}]
+        state = validate_and_normalize_node(
+            {"pull_requests": [{"number": 30, "reviews": raw_reviews, "reviews_count": 5}], "as_of": AS_OF}
+        )
+        pr = state["normalized_pull_requests"][0]
+        assert pr["reviews"] == raw_reviews
+        assert pr["reviews_count"] == 5
+
 
 # ===========================================================================
 # 3. analyze_pull_requests_node
@@ -400,6 +458,9 @@ class TestCalculateHealth:
         assert 0 <= health["score"] <= 100
         assert health["status"] in {"healthy", "needs_attention", "at_risk"}
         assert health["method"].startswith("deterministic")
+        components = health["score_components"]
+        assert isinstance(components["activity_and_recency"]["score"], (int, float))
+        assert isinstance(components["contribution_distribution"]["score"], (int, float))
 
     def test_only_supplied_domains_are_weighted(self):
         """With only milestone data, weights rescale and the composite equals the sprint domain score."""
@@ -429,6 +490,9 @@ class TestCalculateHealth:
         assert health["confidence"] == "low"
         risk_ids = [risk["risk_id"] for risk in health["risk_factors"]]
         assert risk_ids == ["no_telemetry"]
+        components = health["score_components"]
+        assert components["activity_and_recency"]["score"] is None
+        assert components["contribution_distribution"]["score"] is None
 
     def test_not_assessed_lists_missing_domains_only(self):
         state = {"as_of": AS_OF, **validate_and_normalize_node({"milestones": [make_milestone()]})}
@@ -611,6 +675,162 @@ class TestBuildJsonReport:
     def test_report_always_strict_json(self):
         report = build_json_report_node(self._state())["report"]
         json.dumps(report, ensure_ascii=False, allow_nan=False)
+
+
+# ===========================================================================
+# LG-04: Data quality record counts (received, accepted, rejected)
+# ===========================================================================
+
+class TestLG04RecordQualityCounts:
+    DOMAINS = ("contributor", "commit", "pull_request", "issue", "milestone")
+
+    def test_five_domain_mixed_input_counts(self):
+        """One valid dictionary and two invalid entries per domain -> received=3, accepted=1, rejected=2."""
+        raw_inputs = {
+            "contributors": [{"github_username": "dev1", "contributions": 10}, "invalid_str", 123],
+            "commits": [{"sha": "c1", "message": "feat: test", "additions": 5}, 456, None],
+            "pull_requests": [{"number": 1, "title": "PR 1", "state": "open"}, True, "invalid_pr"],
+            "issues": [{"number": 10, "title": "Issue 10", "state": "open"}, [1, 2], 789],
+            "milestones": [{"milestone_id": "m1", "title": "M1", "state": "open"}, False, 999],
+        }
+        report = run_analysis(
+            raw_inputs["contributors"],
+            raw_inputs["commits"],
+            raw_inputs["pull_requests"],
+            raw_inputs["issues"],
+            raw_inputs["milestones"],
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 3
+            assert quality[f"{domain}_records_accepted"] == 1
+            assert quality[f"{domain}_records_rejected"] == 2
+
+        # Verify existing analysis scores and report generation remain unaffected
+        health = report["project_health"]
+        assert 0 <= health["score"] <= 100
+        assert health["status"] in {"healthy", "needs_attention", "at_risk"}
+        json.dumps(report, ensure_ascii=False, allow_nan=False)
+
+    def test_all_valid_lists(self):
+        report = run_analysis(
+            contributors=[{"github_username": "a"}, {"github_username": "b"}],
+            commits=[{"sha": "c1"}, {"sha": "c2"}],
+            pull_requests=[{"number": 1}, {"number": 2}],
+            issues=[{"number": 1}, {"number": 2}],
+            milestones=[{"milestone_id": "m1"}, {"milestone_id": "m2"}],
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 2
+            assert quality[f"{domain}_records_accepted"] == 2
+            assert quality[f"{domain}_records_rejected"] == 0
+
+    def test_all_invalid_lists(self):
+        report = run_analysis(
+            contributors=["bad1", 100, None],
+            commits=[True, 200, "bad2"],
+            pull_requests=[None, False, 300],
+            issues=[400, "bad3", [1]],
+            milestones=["bad4", 500, None],
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 3
+            assert quality[f"{domain}_records_accepted"] == 0
+            assert quality[f"{domain}_records_rejected"] == 3
+
+    def test_empty_lists(self):
+        report = run_analysis(
+            contributors=[],
+            commits=[],
+            pull_requests=[],
+            issues=[],
+            milestones=[],
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 0
+            assert quality[f"{domain}_records_accepted"] == 0
+            assert quality[f"{domain}_records_rejected"] == 0
+
+    def test_null_inputs(self):
+        report = run_analysis(
+            contributors=None,
+            commits=None,
+            pull_requests=None,
+            issues=None,
+            milestones=None,
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 0
+            assert quality[f"{domain}_records_accepted"] == 0
+            assert quality[f"{domain}_records_rejected"] == 0
+
+    def test_single_record_dictionaries(self):
+        report = run_analysis(
+            contributors={"github_username": "solo_dev"},
+            commits={"sha": "solo_commit"},
+            pull_requests={"number": 101},
+            issues={"number": 202},
+            milestones={"milestone_id": "solo_m"},
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 1
+            assert quality[f"{domain}_records_accepted"] == 1
+            assert quality[f"{domain}_records_rejected"] == 0
+
+    def test_wrapper_dictionaries_containing_lists(self):
+        report = run_analysis(
+            contributors={"contributors": [{"github_username": "wrapped_dev"}, "bad"]},
+            commits={"commits": [{"sha": "wrapped_commit"}, 123]},
+            pull_requests={"pull_requests": [{"number": 1}, None]},
+            issues={"issues": [{"number": 2}, True]},
+            milestones={"milestones": [{"milestone_id": "m1"}, "bad"]},
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 2
+            assert quality[f"{domain}_records_accepted"] == 1
+            assert quality[f"{domain}_records_rejected"] == 1
+
+    def test_wrapper_dictionaries_with_no_expected_key(self):
+        report = run_analysis(
+            contributors={"unrelated_key": "val1"},
+            commits={"unrelated_key": "val2"},
+            pull_requests={"unrelated_key": "val3"},
+            issues={"unrelated_key": "val4"},
+            milestones={"unrelated_key": "val5"},
+            as_of=AS_OF,
+        )
+        quality = report["data_quality"]
+        for domain in self.DOMAINS:
+            assert quality[f"{domain}_records_received"] == 1
+            assert quality[f"{domain}_records_accepted"] == 1
+            assert quality[f"{domain}_records_rejected"] == 0
+
+    def test_do_not_mutate_raw_input_objects(self):
+        raw_pr = {"number": 42, "reviews": [{"state": "APPROVED"}]}
+        raw_issue = {"number": 99, "assignees": ["alice"]}
+        state = validate_and_normalize_node(
+            {
+                "pull_requests": [raw_pr],
+                "issues": [raw_issue],
+                "as_of": AS_OF,
+            }
+        )
+        assert raw_pr == {"number": 42, "reviews": [{"state": "APPROVED"}]}
+        assert raw_issue == {"number": 99, "assignees": ["alice"]}
+        assert state["normalized_pull_requests"][0]["number"] == 42
 
 
 # ===========================================================================

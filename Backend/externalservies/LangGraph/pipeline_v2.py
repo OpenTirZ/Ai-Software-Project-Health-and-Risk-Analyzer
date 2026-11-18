@@ -185,6 +185,7 @@ class ProjectHealthState(TypedDict, total=False):
     as_of: str
 
     # Intermediate node outputs
+    telemetry_counts: dict[str, dict[str, int]]
     normalized_contributors: list[dict[str, Any]]
     normalized_commits: list[dict[str, Any]]
     normalized_pull_requests: list[dict[str, Any]]
@@ -208,22 +209,39 @@ def _log(state: ProjectHealthState, message: str) -> None:
         print(f"\n[NODE] {message}")
 
 
-def _as_records(payload: Any, wrapper_key: str) -> list[dict[str, Any]]:
-    """Accept a list, one record, or a wrapper object containing the list."""
+def _inspect_payload(payload: Any, wrapper_key: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Inspect and extract dictionary records while capturing received, accepted, and rejected counts.
+
+    Preserves exact _as_records() validation semantics.
+    """
     if payload is None:
-        return []
+        return [], {"received": 0, "accepted": 0, "rejected": 0}
     if isinstance(payload, dict) and wrapper_key in payload:
         payload = payload.get(wrapper_key)
     if payload is None:
-        return []
+        return [], {"received": 0, "accepted": 0, "rejected": 0}
     if isinstance(payload, dict):
-        return [payload]
+        return [payload], {"received": 1, "accepted": 1, "rejected": 0}
     if isinstance(payload, (list, tuple)):
-        return [item for item in payload if isinstance(item, dict)]
+        received = len(payload)
+        accepted_records = [item for item in payload if isinstance(item, dict)]
+        accepted = len(accepted_records)
+        rejected = received - accepted
+        return accepted_records, {
+            "received": received,
+            "accepted": accepted,
+            "rejected": rejected,
+        }
     raise TypeError(
         f"{wrapper_key} must be a JSON object, a list of objects, or null; "
         f"received {type(payload).__name__}."
     )
+
+
+def _as_records(payload: Any, wrapper_key: str) -> list[dict[str, Any]]:
+    """Accept a list, one record, or a wrapper object containing the list."""
+    records, _ = _inspect_payload(payload, wrapper_key)
+    return records
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -339,11 +357,25 @@ def validate_and_normalize_node(state: ProjectHealthState) -> dict[str, Any]:
     """Validate all five telemetry inputs and normalize dates/numbers/text."""
     _log(state, "validate_and_normalize — validating contributors, commits, PRs, issues, milestones")
 
-    contributors = [_json_safe(row) for row in _as_records(state.get("contributors", []), "contributors")]
-    commits = [_json_safe(row) for row in _as_records(state.get("commits", []), "commits")]
-    pull_requests = [_json_safe(row) for row in _as_records(state.get("pull_requests", []), "pull_requests")]
-    issues = [_json_safe(row) for row in _as_records(state.get("issues", []), "issues")]
-    milestones = [_json_safe(row) for row in _as_records(state.get("milestones", []), "milestones")]
+    raw_contributors, contributor_counts = _inspect_payload(state.get("contributors"), "contributors")
+    raw_commits, commit_counts = _inspect_payload(state.get("commits"), "commits")
+    raw_pull_requests, pr_counts = _inspect_payload(state.get("pull_requests"), "pull_requests")
+    raw_issues, issue_counts = _inspect_payload(state.get("issues"), "issues")
+    raw_milestones, milestone_counts = _inspect_payload(state.get("milestones"), "milestones")
+
+    contributors = [_json_safe(dict(row)) for row in raw_contributors]
+    commits = [_json_safe(dict(row)) for row in raw_commits]
+    pull_requests = [_json_safe(dict(row)) for row in raw_pull_requests]
+    issues = [_json_safe(dict(row)) for row in raw_issues]
+    milestones = [_json_safe(dict(row)) for row in raw_milestones]
+
+    telemetry_counts = {
+        "contributors": contributor_counts,
+        "commits": commit_counts,
+        "pull_requests": pr_counts,
+        "issues": issue_counts,
+        "milestones": milestone_counts,
+    }
 
     for contributor in contributors:
         contributor["github_username"] = str(contributor.get("github_username") or "unknown")
@@ -364,11 +396,15 @@ def validate_and_normalize_node(state: ProjectHealthState) -> dict[str, Any]:
         pull_request["number"] = _to_non_negative_int(pull_request.get("number"))
         pull_request["title"] = _valid_text(pull_request.get("title"), 200)
         pull_request["state"] = _state_text(pull_request)
-        pull_request["reviews_count"] = _to_non_negative_int(
-            pull_request.get("reviews_count", len(pull_request.get("reviews") or []))
-        )
-        if not isinstance(pull_request.get("reviews"), list):
-            pull_request["reviews"] = []
+        reviews = pull_request.get("reviews")
+        if not isinstance(reviews, list):
+            reviews = []
+        pull_request["reviews"] = reviews
+
+        if "reviews_count" in pull_request and pull_request["reviews_count"] is not None:
+            pull_request["reviews_count"] = _to_non_negative_int(pull_request["reviews_count"])
+        else:
+            pull_request["reviews_count"] = len(reviews)
         pull_request["open_duration_hours"] = _to_non_negative_float(pull_request.get("open_duration_hours"))
         for field in ("created_at", "updated_at", "closed_at", "merged_at"):
             parsed = _parse_datetime(pull_request.get(field))
@@ -406,6 +442,7 @@ def validate_and_normalize_node(state: ProjectHealthState) -> dict[str, Any]:
         "normalized_pull_requests": pull_requests,
         "normalized_issues": issues,
         "normalized_milestones": milestones,
+        "telemetry_counts": telemetry_counts,
     }
 
 
@@ -931,12 +968,20 @@ def calculate_health_node(state: ProjectHealthState) -> dict[str, Any]:
         "coverage": coverage,
         "coverage_ratio": _round(coverage_ratio),
         "score_components": {
-            "activity_and_recency": {"weight": WEIGHT_ACTIVITY, "score": _round(activity_score), "max_score": 100},
-            "contribution_distribution": {"weight": WEIGHT_DISTRIBUTION, "score": _round(distribution_risk_score), "max_score": 100},
-            "pull_request_flow": {"weight": WEIGHT_PULL_REQUESTS, "score": pull_request.get("domain_score"), "max_score": 100},
-            "issue_backlog_health": {"weight": WEIGHT_ISSUES, "score": issue.get("domain_score"), "max_score": 100},
-            "sprint_velocity": {"weight": WEIGHT_SPRINT, "score": sprint.get("domain_score"), "max_score": 100},
-        },
+                "activity_and_recency": {
+                    "weight": WEIGHT_ACTIVITY,
+                    "score": _round(activity_score) if (contributor.get("has_data") or commit.get("has_data")) else None,
+                    "max_score": 100,
+                },
+                "contribution_distribution": {
+                    "weight": WEIGHT_DISTRIBUTION,
+                    "score": _round(distribution_risk_score) if contributor.get("has_data") else None,
+                    "max_score": 100,
+                },
+                "pull_request_flow": {"weight": WEIGHT_PULL_REQUESTS, "score": pull_request.get("domain_score"), "max_score": 100},
+                "issue_backlog_health": {"weight": WEIGHT_ISSUES, "score": issue.get("domain_score"), "max_score": 100},
+                "sprint_velocity": {"weight": WEIGHT_SPRINT, "score": sprint.get("domain_score"), "max_score": 100},
+            },
         "risk_factors": risks,
         "not_assessed": not_assessed,
         "assessment_scope": "contributors, commits, pull requests, issues and milestones with supplied data",
@@ -1401,6 +1446,20 @@ def build_json_report_node(state: ProjectHealthState) -> dict[str, Any]:
     health = state.get("health_analysis", {})
     ai = state.get("ai_analysis", {})
     llm_status = state.get("llm_status", {})
+    counts = state.get("telemetry_counts") or {}
+
+    def _domain_counts(domain: str, norm_key: str) -> tuple[int, int, int]:
+        c = counts.get(domain)
+        if isinstance(c, dict) and "received" in c:
+            return int(c.get("received", 0)), int(c.get("accepted", 0)), int(c.get("rejected", 0))
+        norm_len = len(state.get(norm_key, []))
+        return norm_len, norm_len, 0
+
+    c_rec, c_acc, c_rej = _domain_counts("contributors", "normalized_contributors")
+    cm_rec, cm_acc, cm_rej = _domain_counts("commits", "normalized_commits")
+    pr_rec, pr_acc, pr_rej = _domain_counts("pull_requests", "normalized_pull_requests")
+    is_rec, is_acc, is_rej = _domain_counts("issues", "normalized_issues")
+    ms_rec, ms_acc, ms_rej = _domain_counts("milestones", "normalized_milestones")
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1437,11 +1496,21 @@ def build_json_report_node(state: ProjectHealthState) -> dict[str, Any]:
         "limitations": list(dict.fromkeys(ai.get("limitations", []))),
         "llm": llm_status,
         "data_quality": {
-            "contributor_records_received": len(state.get("normalized_contributors", [])),
-            "commit_records_received": len(state.get("normalized_commits", [])),
-            "pull_request_records_received": len(state.get("normalized_pull_requests", [])),
-            "issue_records_received": len(state.get("normalized_issues", [])),
-            "milestone_records_received": len(state.get("normalized_milestones", [])),
+            "contributor_records_received": c_rec,
+            "contributor_records_accepted": c_acc,
+            "contributor_records_rejected": c_rej,
+            "commit_records_received": cm_rec,
+            "commit_records_accepted": cm_acc,
+            "commit_records_rejected": cm_rej,
+            "pull_request_records_received": pr_rec,
+            "pull_request_records_accepted": pr_acc,
+            "pull_request_records_rejected": pr_rej,
+            "issue_records_received": is_rec,
+            "issue_records_accepted": is_acc,
+            "issue_records_rejected": is_rej,
+            "milestone_records_received": ms_rec,
+            "milestone_records_accepted": ms_acc,
+            "milestone_records_rejected": ms_rej,
             "assessment_scope": health.get("assessment_scope"),
             "score_is_trained_prediction": False,
         },
@@ -1498,17 +1567,17 @@ def run_analysis(
     as_of: str | None = None,
 ) -> dict[str, Any]:
     """Run the V2 graph and return the validated report dictionary."""
-    result = app_graph.invoke(
-        {
-            "contributors": contributors or [],
-            "commits": commits or [],
-            "pull_requests": pull_requests or [],
-            "issues": issues or [],
-            "milestones": milestones or [],
-            "debug": debug,
-            **({"as_of": as_of} if as_of else {}),
-        }
-    )
+    state_input: dict[str, Any] = {
+        "contributors": contributors,
+        "commits": commits,
+        "pull_requests": pull_requests,
+        "issues": issues,
+        "milestones": milestones,
+        "debug": debug,
+    }
+    if as_of:
+        state_input["as_of"] = as_of
+    result = app_graph.invoke(state_input)
     return result["report"]
 
 
