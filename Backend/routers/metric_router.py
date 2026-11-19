@@ -1,3 +1,4 @@
+
 """
 FastAPI router for Project Health and Risk Metrics.
 ---------------------------------------------------
@@ -29,6 +30,8 @@ from Backend.analysis.health_summary import (
     build_health_summary,
     build_metrics_breakdown,
 )
+from Backend.ai.recommendation_service import generate_recommendations
+from Backend.ai.schemas import RecommendationSchema
 from Backend.persistence import (
     DatabaseError,
     get_project,
@@ -100,6 +103,7 @@ class MetricsBreakdownResponse(BaseModel):
     evaluated_at: str
     weights_used: Dict[str, float]
     indicators: Dict[str, IndicatorDetailSchema]
+    recommendations: List[RecommendationSchema] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -253,14 +257,15 @@ def get_health_summary_endpoint(
     "/{id}/metrics/breakdown",
     response_model=MetricsBreakdownResponse,
     summary="Get detailed metrics breakdown",
-    description="Returns granular indicators (bottlenecks, workload, stale issues, schedule risk) with weights and evidence.",
+    description="Returns granular indicators (bottlenecks, workload, stale issues, schedule risk) with weights and evidence, along with advisory engineering recommendations.",
 )
 def get_metrics_breakdown_endpoint(
     id: str = Path(..., description="Target project ObjectId"),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Retrieve dimensional breakdown across bottlenecks, workload, stale issues, and schedule risk.
+    Retrieve dimensional breakdown across bottlenecks, workload, stale issues,
+    and schedule risk, along with advisory engineering recommendations.
     """
     project, commits, contributors, pull_requests, issues, sprints = _fetch_project_data(
         id, current_user
@@ -274,5 +279,19 @@ def get_metrics_breakdown_endpoint(
         issues=issues,
         sprints=sprints,
     )
-    return breakdown
 
+    # Generate grounded, advisory-only engineering recommendations.
+    # If recommendation generation fails, metrics are still returned.
+    try:
+        breakdown["recommendations"] = [
+            recommendation.model_dump()
+            for recommendation in generate_recommendations(breakdown)
+        ]
+    except Exception:
+        logger.exception(
+            "Failed to generate engineering recommendations for project %s",
+            id,
+        )
+        breakdown["recommendations"] = []
+
+    return breakdown
