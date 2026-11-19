@@ -31,6 +31,7 @@ import pytest
 from bson import ObjectId
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from Backend.ai.schemas import RecommendationSchema
 
 # Mock MongoClient before importing Backend modules to prevent real network calls
 _mock_client = MagicMock()
@@ -524,3 +525,59 @@ def test_metrics_breakdown_success(test_app):
         assert "schedule_risk" in data["indicators"]
         assert "weights_used" in data
         assert data["indicators"]["schedule_risk"]["status"] == STATUS_INSUFFICIENT
+
+def test_metrics_breakdown_includes_recommendations(test_app):
+    """Metrics breakdown response includes generated advisory recommendations."""
+    test_app.dependency_overrides[get_current_user] = lambda: MOCK_OWNER_USER
+    client = TestClient(test_app)
+
+    mock_recommendation = RecommendationSchema(
+        category="bottleneck",
+        condition="Unreviewed pull requests",
+        action="Introduce a 24-hour PR review SLA.",
+        rationale="Timely reviews help reduce PR queue congestion.",
+        priority="HIGH",
+        target_role="TECH_LEAD",
+        is_advisory=True,
+    )
+
+    with patch(
+        "Backend.routers.metric_router.get_project",
+        return_value=MOCK_PROJECT,
+    ), patch(
+        "Backend.routers.metric_router.get_project_commits",
+        return_value=[],
+    ), patch(
+        "Backend.routers.metric_router.get_project_contributors",
+        return_value=[],
+    ), patch(
+        "Backend.routers.metric_router.get_project_pull_requests",
+        return_value=[],
+    ), patch(
+        "Backend.routers.metric_router.get_project_issues",
+        return_value=[],
+    ), patch(
+        "Backend.routers.metric_router.get_project_sprints",
+        return_value=[],
+    ), patch(
+        "Backend.routers.metric_router.generate_recommendations",
+        return_value=[mock_recommendation],
+    ) as mock_generate:
+        resp = client.get(
+            f"/api/projects/{PROJECT_ID}/metrics/breakdown"
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert "recommendations" in data
+    assert len(data["recommendations"]) == 1
+
+    recommendation = data["recommendations"][0]
+    assert recommendation["action"] == (
+        "Introduce a 24-hour PR review SLA."
+    )
+    assert recommendation["priority"] == "HIGH"
+    assert recommendation["is_advisory"] is True
+
+    mock_generate.assert_called_once()
