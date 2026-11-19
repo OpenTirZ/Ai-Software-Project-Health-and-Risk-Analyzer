@@ -1,3 +1,4 @@
+
 """
 Reports & Schedules Persistence Layer (Sub-DAO) — AI Software Project Health & Risk Analyzer
 ---------------------------------------------------------------------------------------------
@@ -43,12 +44,10 @@ from Backend.persistence import DatabaseError, serialize_document, to_object_id
 
 logger = logging.getLogger(__name__)
 
-# Allowed schedule values (validated before any database write).
 VALID_FREQUENCIES = ("daily", "weekly", "monthly")
 VALID_DESTINATIONS = ("email", "slack")
 VALID_SCHEDULE_STATUSES = ("active", "paused", "completed", "failed")
 
-# Next-run lookahead used when a schedule has no explicit nextRunAt.
 FREQUENCY_INTERVALS_HOURS = {
     "daily": 24,
     "weekly": 24 * 7,
@@ -70,6 +69,7 @@ def _schedule_to_document(schedule_data: Dict[str, Any]) -> Dict[str, Any]:
     destinations = schedule_data.get("destinations") or []
     if not isinstance(destinations, (list, tuple)) or not destinations:
         raise ValueError("destinations must be a non-empty list.")
+
     cleaned_destinations = []
     for destination in destinations:
         value = str(destination).strip().lower()
@@ -101,6 +101,7 @@ def _schedule_to_document(schedule_data: Dict[str, Any]) -> Dict[str, Any]:
 # REPORTS DAO
 # ---------------------------------------------------------------------------
 
+
 def save_report(
     report: Dict[str, Any],
     project_id: Union[str, ObjectId],
@@ -109,50 +110,106 @@ def save_report(
 ) -> str:
     """
     Persist one validated pipeline status report into the reports collection.
-
-    Args:
-        report: The validated JSON report dict produced by pipeline_v2
-            (run_analysis). Must contain generatedAt, summary and metrics.
-        project_id: Project ObjectId (string or ObjectId).
-        raw_prompt_tokens: Prompt tokens reported by the chat model; overrides
-            the value found in report["llm"]["raw_prompt_tokens"] when given.
-
-    Returns:
-        The inserted report _id as a string.
-
-    Raises:
-        ValueError: If the report is not a dict or is missing required fields.
-        DatabaseError: On connectivity or driver failures.
     """
     if not isinstance(report, dict):
-        raise ValueError("report must be a JSON object produced by pipeline_v2.run_analysis.")
+        raise ValueError(
+            "report must be a JSON object produced by pipeline_v2.run_analysis."
+        )
 
     generated_at = report.get("generated_at")
     summary = report.get("executive_summary")
-    metrics_snapshot = report.get("metricsSnapshot") if "metricsSnapshot" in report else {
-        "project_health": report.get("project_health"),
-        "contributor_report": (report.get("contributor_report") or {}).get("metrics"),
-        "commit_report": (report.get("commit_report") or {}).get("metrics"),
-        "pull_request_report": (report.get("pull_request_report") or {}).get("metrics"),
-        "issue_report": (report.get("issue_report") or {}).get("metrics"),
-        "sprint_report": (report.get("sprint_report") or {}).get("metrics"),
-    }
-    if not generated_at or summary is None or metrics_snapshot is None:
+
+    contributor_report = report.get("contributor_report")
+    if not isinstance(contributor_report, dict):
+        contributor_report = {}
+
+    pull_request_report = report.get("pull_request_report")
+    if not isinstance(pull_request_report, dict):
+        pull_request_report = {}
+
+    sprint_report = report.get("sprint_report")
+    if not isinstance(sprint_report, dict):
+        sprint_report = {}
+
+    metrics_snapshot = report.get("metricsSnapshot")
+
+    if not isinstance(metrics_snapshot, dict):
+        metrics_snapshot = {
+            "project_health": report.get("project_health"),
+            "contributor_report": contributor_report.get("metrics"),
+            "commit_report": (
+                (report.get("commit_report") or {}).get("metrics")
+                if isinstance(report.get("commit_report"), dict)
+                else None
+            ),
+            "pull_request_report": pull_request_report.get("metrics"),
+            "issue_report": (
+                (report.get("issue_report") or {}).get("metrics")
+                if isinstance(report.get("issue_report"), dict)
+                else None
+            ),
+            "sprint_report": sprint_report.get("metrics"),
+        }
+    else:
+        metrics_snapshot = dict(metrics_snapshot)
+
+    metric_sections = (
+        "project_health",
+        "contributor_report",
+        "commit_report",
+        "pull_request_report",
+        "issue_report",
+        "sprint_report",
+    )
+
+    has_metrics = any(
+        isinstance(metrics_snapshot.get(section), dict)
+        and bool(metrics_snapshot[section])
+        for section in metric_sections
+    )
+
+    if not generated_at or summary is None or not has_metrics:
         raise ValueError(
             "report must contain 'generated_at', 'executive_summary' and metric sections."
         )
 
+    metrics_snapshot["contributors"] = (
+        metrics_snapshot.get("contributors")
+        or contributor_report.get("contributors", [])
+    )
+
+    metrics_snapshot["bottleneck_prs"] = (
+        metrics_snapshot.get("bottleneck_prs")
+        or pull_request_report.get("bottleneck_prs", [])
+    )
+
+    metrics_snapshot["milestones"] = (
+        metrics_snapshot.get("milestones")
+        or sprint_report.get("milestones", [])
+    )
+
     if raw_prompt_tokens is None:
         llm_status = report.get("llm") or {}
         candidate = llm_status.get("raw_prompt_tokens")
-        raw_prompt_tokens = candidate if isinstance(candidate, int) and candidate >= 0 else None
+        raw_prompt_tokens = (
+            candidate
+            if isinstance(candidate, int) and candidate >= 0
+            else None
+        )
+
+    project_health = report.get("project_health")
+    if not isinstance(project_health, dict):
+        project_health = {}
 
     document = {
         "projectId": to_object_id(project_id),
-        "generatedAt": _parse_mongo_date(generated_at) or datetime.now(timezone.utc),
+        "generatedAt": (
+            _parse_mongo_date(generated_at)
+            or datetime.now(timezone.utc)
+        ),
         "pipelineVersion": report.get("pipeline_version"),
         "summary": summary,
-        "risks": report.get("project_health", {}).get("risk_factors", []),
+        "risks": project_health.get("risk_factors", []),
         "recommendations": report.get("recommendations", []),
         "metricsSnapshot": metrics_snapshot,
         "rawPromptTokens": raw_prompt_tokens,
@@ -164,10 +221,14 @@ def save_report(
         return str(result.inserted_id)
     except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
         logger.error("Database unreachable during save_report: %s", exc)
-        raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+        raise DatabaseError(
+            "Database is temporarily unavailable. Please try again later."
+        ) from exc
     except PyMongoError as exc:
         logger.error("Database error during save_report: %s", exc)
-        raise DatabaseError("A database error occurred while saving the report.") from exc
+        raise DatabaseError(
+            "A database error occurred while saving the report."
+        ) from exc
 
 
 def get_report(report_id: Union[str, ObjectId]) -> Optional[Dict[str, Any]]:
@@ -196,6 +257,7 @@ def get_project_reports(
     """
     if limit is None or int(limit) <= 0:
         limit = 50
+
     try:
         cursor = (
             reports_collection.find({"projectId": to_object_id(project_id)})
@@ -326,17 +388,20 @@ def update_report_schedule(
     allowed_keys = {"frequency", "destinations", "status", "nextRunAt", "lastRun"}
     merge_source: Dict[str, Any] = {}
     current: Optional[Dict[str, Any]] = None
+
     for key in ("frequency", "destinations", "status"):
         if key in update_data:
             merge_source[key] = update_data[key]
 
     if merge_source:
-        # Re-validate the merged schedule so partial updates cannot produce
-        # invalid combinations (e.g. destinations emptied out).
         current = report_schedules_collection.find_one({"_id": to_object_id(schedule_id)})
         if current is None:
             return False
-        merged = {key: serialize_document(current.get(key)) for key in ("frequency", "destinations", "status")}
+
+        merged = {
+            key: serialize_document(current.get(key))
+            for key in ("frequency", "destinations", "status")
+        }
         merged.update(merge_source)
         validated = _schedule_to_document(merged)
         update_data = {**update_data, **{key: validated[key] for key in merge_source}}
@@ -345,10 +410,12 @@ def update_report_schedule(
     for key, value in update_data.items():
         if key in allowed_keys:
             update_fields[key] = value
+
     if not update_fields:
         raise ValueError("No editable fields provided for the schedule update.")
 
     update_fields["updatedAt"] = datetime.now(timezone.utc)
+
     try:
         result = report_schedules_collection.update_one(
             {"_id": to_object_id(schedule_id)},
@@ -376,7 +443,9 @@ def record_schedule_run(
         raise ValueError(
             f"status must be one of {', '.join(VALID_SCHEDULE_STATUSES)}."
         )
+
     moment = ran_at or datetime.now(timezone.utc)
+
     try:
         result = report_schedules_collection.update_one(
             {"_id": to_object_id(schedule_id)},
@@ -411,19 +480,25 @@ def get_due_schedules(
     scheduler loop; callers pass now for deterministic tests.
     """
     moment = now or datetime.now(timezone.utc)
+
     try:
         cursor = report_schedules_collection.find({"status": {"$in": list(statuses)}})
         due: List[Dict[str, Any]] = []
+
         for document in cursor:
             next_run = document.get("nextRunAt")
             if next_run is not None:
                 is_due = _parse_mongo_date(next_run) <= moment
             else:
                 last_run = _parse_mongo_date(document.get("lastRun"))
-                interval_hours = FREQUENCY_INTERVALS_HOURS.get(document.get("frequency"), 24 * 7)
+                interval_hours = FREQUENCY_INTERVALS_HOURS.get(
+                    document.get("frequency"), 24 * 7
+                )
                 is_due = last_run is None or last_run <= moment - timedelta(hours=interval_hours)
+
             if is_due:
                 due.append(serialize_document(document))
+
         return due
     except PyMongoError as exc:
         logger.error("Database error during get_due_schedules: %s", exc)
@@ -434,10 +509,12 @@ def _parse_mongo_date(value: Any) -> Optional[datetime]:
     """Parse ISO strings / datetimes into aware UTC datetimes (Mongo-safe)."""
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
     if isinstance(value, str):
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
         except ValueError:
             return None
+
     return None
