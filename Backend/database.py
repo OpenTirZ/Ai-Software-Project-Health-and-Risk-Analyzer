@@ -68,6 +68,7 @@ audit_logs_collection = db["audit_logs"]
 contributors_collection = db["contributors"]
 milestones_collection = db["milestones"]
 metric_snapshots_collection = db["metric_snapshots"]
+report_schedules_collection = db["report_schedules"]
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,12 @@ def ensure_indexes():
 
     Issues: unique compound index on (projectId, github_id) so repeated
     GitHub issue synchronization cannot create duplicate issues.
+
+    Reports: compound index on (projectId, generatedAt: -1) so per-project
+    report history listings read newest-first directly from the index.
+
+    Report Schedules: compound index on (projectId, status) for schedule
+    lookups per project filtered by active/paused status.
     """
     try:
         contributors_collection.create_index(
@@ -139,6 +146,16 @@ def ensure_indexes():
             unique=True,
             background=True,
             partialFilterExpression={"github_id": {"$exists": True}},
+        )
+        # Reports: newest-first history per project (projectId, generatedAt DESC).
+        reports_collection.create_index(
+            [("projectId", 1), ("generatedAt", -1)],
+            background=True,
+        )
+        # Report schedules: per-project status lookups for the scheduler.
+        report_schedules_collection.create_index(
+            [("projectId", 1), ("status", 1)],
+            background=True,
         )
         logger.info("Database indexes ensured.")
     except Exception as exc:  # pragma: no cover
