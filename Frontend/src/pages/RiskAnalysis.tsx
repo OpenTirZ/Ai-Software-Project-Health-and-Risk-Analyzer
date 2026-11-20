@@ -98,6 +98,25 @@ export const RiskAnalysis: React.FC<RiskAnalysisProps> = ({ project, onNavigate 
         </button>
       </div>
 
+      {/* Error Alert Banner */}
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
+            <div>
+              <p className="font-semibold text-xs text-rose-900">Failed to load risk analysis</p>
+              <p className="text-xs text-rose-700">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => fetchRisks(project.id)}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Filter Tabs & Stat Boxes */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Filter Pills */}

@@ -152,6 +152,25 @@ export const HealthAnalysis: React.FC<HealthAnalysisProps> = ({ project, onNavig
         </button>
       </div>
 
+      {/* Error Alert Banner */}
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+            <div>
+              <p className="font-semibold text-xs text-rose-900">Failed to load health metrics</p>
+              <p className="text-xs text-rose-700">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => fetchBreakdown(project.id)}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Main Analysis Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Large Gauge Card (5 cols) */}

@@ -217,6 +217,25 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
         </div>
       </div>
 
+      {/* Error Alert Banner */}
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+            <div>
+              <p className="font-semibold text-xs text-rose-900">Failed to load project telemetry</p>
+              <p className="text-xs text-rose-700">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => project?.id && fetchMetrics(project.id)}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Sync / Status Feedback Banner */}
       {syncFeedback && (
         <div className="p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center justify-between animate-fadeIn">

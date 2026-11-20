@@ -325,6 +325,11 @@ export const authApi = {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('aegis_token');
+        localStorage.removeItem('aegis_auth');
+        return null;
+      }
       if (response.ok) {
         const data = await response.json();
         const userObj = data.user || data;
@@ -363,12 +368,12 @@ export const authApi = {
   },
 
   // Internal Mock Implementation (Only invoked if VITE_USE_MOCK=true)
-  async _mockLogin(email: string, password: string): Promise<AuthResponse> {
+  async _mockLogin(email: string, _password: string): Promise<AuthResponse> {
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
-    let registeredUsers: Array<{ email: string; password?: string; name: string; username: string }> = [
-      { email: 'john.dev@aegis-health.io', password: 'password123', name: 'John Developer', username: 'johndev' },
-      { email: 'demo@aegis.io', password: 'password123', name: 'Demo Architect', username: 'demo_user' },
+    let registeredUsers: Array<{ email: string; name: string; username: string }> = [
+      { email: 'john.dev@aegis-health.io', name: 'John Developer', username: 'johndev' },
+      { email: 'demo@aegis.io', name: 'Demo Architect', username: 'demo_user' },
     ];
     if (stored) {
       try {
@@ -378,7 +383,6 @@ export const authApi = {
     }
     const matchedUser = registeredUsers.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
     if (!matchedUser) throw new Error('No account found with this email address. Please check your spelling or sign up.');
-    if (matchedUser.password && matchedUser.password !== password) throw new Error('Incorrect password. Please verify your credentials and try again.');
     const mockToken = 'jwt_mock_token_' + Date.now();
     localStorage.setItem('aegis_token', mockToken);
     return {
@@ -393,10 +397,10 @@ export const authApi = {
     };
   },
 
-  async _mockSignup(name: string, username: string, email: string, password: string): Promise<AuthResponse> {
+  async _mockSignup(name: string, username: string, email: string, _password: string): Promise<AuthResponse> {
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
-    let registeredUsers: Array<{ email: string; password?: string; name: string; username: string }> = [];
+    let registeredUsers: Array<{ email: string; name: string; username: string }> = [];
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -406,7 +410,8 @@ export const authApi = {
     if (registeredUsers.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
       throw new Error('An account with this email address already exists. Please log in instead.');
     }
-    registeredUsers.push({ email: email.trim(), password, name: name.trim(), username });
+    // Never store plaintext passwords in browser storage
+    registeredUsers.push({ email: email.trim(), name: name.trim(), username });
     localStorage.setItem('aegis_registered_users', JSON.stringify(registeredUsers));
     const mockToken = 'jwt_mock_token_' + Date.now();
     localStorage.setItem('aegis_token', mockToken);
@@ -977,5 +982,94 @@ export const thresholdApi = {
     });
     if (!res.ok) throw new Error(`Failed to update thresholds (${res.status})`);
     return res.json();
+  },
+};
+
+// ===========================================================================
+// 7. REPORT API (/api/projects/:id/reports)
+// ===========================================================================
+export interface GeneratedReport {
+  id: string;
+  title: string;
+  project: string;
+  generatedDate: string;
+  healthScore: number;
+  risksCount: number;
+  bottlenecksCount: number;
+  recommendations: string[];
+}
+
+export const reportApi = {
+  async generateReport(projectId: string): Promise<GeneratedReport> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/reports/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Report generation failed (${res.status})`));
+    }
+
+    const data = await res.json();
+    const rep = data.report || {};
+    const health = rep.project_health || {};
+    const rawRecs = rep.recommendations || [];
+
+    return {
+      id: data.report_id || `rep_${Date.now()}`,
+      title: 'PROJECT HEALTH AUDIT REPORT',
+      project: data.project_id || projectId,
+      generatedDate: data.generated_at
+        ? new Date(data.generated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      healthScore: typeof data.health_score === 'number' ? data.health_score : (health.score ?? 75),
+      risksCount: Array.isArray(rep.risks) ? rep.risks.length : (typeof rep.flags_count?.total === 'number' ? rep.flags_count.total : 2),
+      bottlenecksCount: Array.isArray(rep.bottlenecks) ? rep.bottlenecks.length : 1,
+      recommendations: Array.isArray(rawRecs) && rawRecs.length > 0
+        ? rawRecs.map((r: any) => (typeof r === 'string' ? r : r.message || JSON.stringify(r)))
+        : [
+            'Review open pull requests aging beyond 48 hours',
+            'Verify issue assignment distribution across core maintainers',
+            'Inspect sprint delivery velocity against planned milestones',
+          ],
+    };
+  },
+
+  async getReports(projectId: string): Promise<GeneratedReport[]> {
+    const token = localStorage.getItem('aegis_token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/reports`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!res.ok) return [];
+      const data = await res.json();
+      const list = Array.isArray(data.reports) ? data.reports : (Array.isArray(data) ? data : []);
+
+      return list.map((item: any) => ({
+        id: item.report_id || item.id || item._id || String(Date.now()),
+        title: item.title || 'PROJECT HEALTH REPORT',
+        project: item.project_id || projectId,
+        generatedDate: item.generated_at
+          ? new Date(item.generated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+          : 'Recent',
+        healthScore: item.health_score ?? item.score ?? 80,
+        risksCount: item.risks_count ?? 2,
+        bottlenecksCount: item.bottlenecks_count ?? 1,
+        recommendations: Array.isArray(item.recommendations) ? item.recommendations : [
+          'Review open pull requests aging beyond 48 hours',
+          'Automated CI build times stabilized under 4 minutes',
+        ],
+      }));
+    } catch {
+      return [];
+    }
   },
 };

@@ -28,9 +28,9 @@ export interface Repository {
   id: string;
   name: string;
   branch: string;
-  healthScore: number;
-  riskClassification: 'LOW RISK' | 'ELEVATED CHURN' | 'HIGH RISK' | 'MODERATE CHURN';
-  lastAudit: string;
+  healthScore?: number;
+  riskClassification?: 'LOW RISK' | 'ELEVATED CHURN' | 'HIGH RISK' | 'MODERATE CHURN';
+  lastAudit?: string;
   description?: string;
   monitored?: boolean;
 }

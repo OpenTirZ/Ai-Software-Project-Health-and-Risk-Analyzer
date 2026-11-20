@@ -76,22 +76,41 @@ export function App() {
   useEffect(() => {
     const token = localStorage.getItem('aegis_token');
     if (token) {
-      authApi.getMe().then((user) => {
-        if (user) {
-          setIsAuthenticated(true);
-          const cleanUsername = user.username?.startsWith('@') ? user.username : `@${user.username || user.email.split('@')[0]}`;
-          const updated: UserProfileData = {
-            ...currentUser,
-            fullName: user.name || 'Developer',
-            username: cleanUsername,
-            email: user.email,
-            role: user.role || 'developer',
-          };
-          setCurrentUser(updated);
-          localStorage.setItem('aegis_user', JSON.stringify(updated));
-        }
-      });
-      loadProjects();
+      authApi
+        .getMe()
+        .then((user) => {
+          if (user) {
+            setIsAuthenticated(true);
+            const cleanUsername = user.username?.startsWith('@') ? user.username : `@${user.username || user.email.split('@')[0]}`;
+            const updated: UserProfileData = {
+              ...currentUser,
+              fullName: user.name || 'Developer',
+              username: cleanUsername,
+              email: user.email,
+              role: user.role || 'developer',
+            };
+            setCurrentUser(updated);
+            localStorage.setItem('aegis_user', JSON.stringify(updated));
+            loadProjects();
+          } else {
+            // Token expired or invalid: clear session to avoid dead-locked state
+            localStorage.removeItem('aegis_token');
+            localStorage.removeItem('aegis_auth');
+            localStorage.removeItem('aegis_user');
+            setIsAuthenticated(false);
+            setCurrentView('login');
+          }
+        })
+        .catch(() => {
+          // Network error or 401 on token check: reset session safely
+          localStorage.removeItem('aegis_token');
+          localStorage.removeItem('aegis_auth');
+          localStorage.removeItem('aegis_user');
+          setIsAuthenticated(false);
+          setCurrentView('login');
+        });
+    } else {
+      setIsAuthenticated(false);
     }
   }, [loadProjects]);
 
@@ -280,6 +299,7 @@ export function App() {
       {currentView === 'reports' && (
         <Reports
           selectedRepo={activeProject?.name || 'Project'}
+          project={activeProject}
           onNavigate={setCurrentView}
         />
       )}
