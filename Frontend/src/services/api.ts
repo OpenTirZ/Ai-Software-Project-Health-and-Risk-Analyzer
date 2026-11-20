@@ -1073,3 +1073,83 @@ export const reportApi = {
     }
   },
 };
+
+// ===========================================================================
+// 8. USER SETTINGS API (/api/auth/me/settings)
+// ===========================================================================
+export interface NotificationPreferences {
+  high_risk_threshold: boolean;
+  weekly_digest: boolean;
+}
+
+export interface NotificationPreferencesUpdate {
+  high_risk_threshold?: boolean;
+  weekly_digest?: boolean;
+}
+
+export const settingsApi = {
+  /**
+   * Fetch current authenticated user's notification preferences
+   * Calls: GET /api/auth/me/settings (with fallback to /auth/me/settings)
+   */
+  async getNotificationPreferences(): Promise<NotificationPreferences> {
+    const token = localStorage.getItem('aegis_token');
+    const headers: Record<string, string> = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    let response = await fetch(`${API_BASE_URL}/auth/me/settings`, { headers });
+    if (response.status === 404 && ROOT_URL !== API_BASE_URL) {
+      const alt = await fetch(`${ROOT_URL}/auth/me/settings`, { headers });
+      if (alt.status !== 404) {
+        response = alt;
+      }
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch settings (${response.status})`));
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Partially or fully update user's notification preferences
+   * Calls: PATCH /api/auth/me/settings (with fallback to /auth/me/settings)
+   */
+  async updateNotificationPreferences(
+    prefs: NotificationPreferencesUpdate
+  ): Promise<NotificationPreferences> {
+    const token = localStorage.getItem('aegis_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    const body = JSON.stringify(prefs);
+
+    let response = await fetch(`${API_BASE_URL}/auth/me/settings`, {
+      method: 'PATCH',
+      headers,
+      body,
+    });
+
+    if (response.status === 404 && ROOT_URL !== API_BASE_URL) {
+      const alt = await fetch(`${ROOT_URL}/auth/me/settings`, {
+        method: 'PATCH',
+        headers,
+        body,
+      });
+      if (alt.status !== 404) {
+        response = alt;
+      }
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to update settings (${response.status})`));
+    }
+
+    return response.json();
+  },
+};

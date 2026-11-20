@@ -1,23 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { PageView, UserProfileData } from '../types';
 import { 
   CheckCircle2, 
   LogOut, 
   Edit3, 
-  Save 
+  Save,
+  AlertCircle,
+  Loader2,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
+import { settingsApi, type NotificationPreferences, type ProjectResponse } from '../services/api';
 
 interface UserProfileProps {
   currentUser?: UserProfileData;
   onUpdateProfile?: (updated: UserProfileData) => void;
   onLogout: () => void;
   onNavigate: (view: PageView) => void;
+  projects?: ProjectResponse[];
+  loadingProjects?: boolean;
 }
+
+const DEFAULT_PREFS: NotificationPreferences = {
+  high_risk_threshold: true,
+  weekly_digest: true,
+};
 
 export const UserProfile: React.FC<UserProfileProps> = ({ 
   currentUser, 
   onUpdateProfile, 
-  onLogout 
+  onLogout,
+  onNavigate,
+  projects = [],
+  loadingProjects = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications'>('profile');
@@ -31,7 +46,50 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     bio: currentUser?.bio || 'Leading backend architecture, microservices refactoring, and AI CI/CD guardrail adoption across all cloud clusters.',
   }));
 
-  // Keep state in sync if currentUser prop updates
+  // Notification Preferences State
+  const confirmedPrefsRef = useRef<NotificationPreferences>(DEFAULT_PREFS);
+  const savingRef = useRef<boolean>(false);
+
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_PREFS);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
+  const [notifSaved, setNotifSaved] = useState(false);
+  const [notifLoadWarning, setNotifLoadWarning] = useState(false);
+
+  // Load notification preferences on component mount
+  useEffect(() => {
+    let isMounted = true;
+    setNotifLoading(true);
+    setNotifLoadWarning(false);
+
+    settingsApi.getNotificationPreferences()
+      .then((prefs) => {
+        if (isMounted) {
+          setNotifPrefs(prefs);
+          confirmedPrefsRef.current = prefs;
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setNotifLoadWarning(true);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setNotifLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Compute live connected repositories count
+  const connectedReposCount = projects.filter((p) => Boolean(p.repo_url)).length;
+
+  // Keep profile state in sync if currentUser prop updates
   useEffect(() => {
     if (currentUser) {
       setProfile((prev) => ({
@@ -68,6 +126,41 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     setProfile(updated);
     if (onUpdateProfile) {
       onUpdateProfile(updated);
+    }
+  };
+
+  const handleTogglePreference = async (key: keyof NotificationPreferences) => {
+    if (savingRef.current || notifLoading) {
+      return; // prevent overlapping requests
+    }
+
+    const previousValue = notifPrefs[key];
+    const updatedPrefs: NotificationPreferences = {
+      ...notifPrefs,
+      [key]: !previousValue,
+    };
+
+    // Optimistic UI update
+    setNotifPrefs(updatedPrefs);
+    setNotifError(null);
+    setNotifSaved(false);
+    setNotifSaving(true);
+    savingRef.current = true;
+
+    try {
+      // Send partial update
+      const saved = await settingsApi.updateNotificationPreferences({ [key]: !previousValue });
+      confirmedPrefsRef.current = saved;
+      setNotifPrefs(saved);
+      setNotifSaved(true);
+      setTimeout(() => setNotifSaved(false), 2000);
+    } catch {
+      // Rollback to last confirmed server state
+      setNotifPrefs(confirmedPrefsRef.current);
+      setNotifError('Unable to save preference. Restored previous settings.');
+    } finally {
+      savingRef.current = false;
+      setNotifSaving(false);
     }
   };
 
@@ -113,7 +206,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 REPOSITORIES MONITORED
               </p>
               <p className="text-3xl font-extrabold text-white mt-0.5">
-                42
+                {loadingProjects ? '—' : connectedReposCount}
               </p>
             </div>
 
@@ -286,28 +379,50 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               API Keys & Permissions
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Manage webhook tokens and continuous integration analyzer credentials.
+              Review continuous integration analyzer credentials and connected project integrations.
             </p>
           </div>
 
           <div className="space-y-4">
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between">
+            {/* Honest Webhook Credentials Row */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold text-slate-800">Production Webhook Token</p>
-                <p className="text-xs font-mono text-slate-500 mt-0.5">aegis_sec_******************391f</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-slate-800">Production Webhook Token</p>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-600 border border-slate-300">
+                    Not configured
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Webhook token generation is managed by workspace administrators. No token currently active.
+                </p>
               </div>
-              <button className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white cursor-pointer">
-                Regenerate
+              <button
+                disabled
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-400 bg-slate-100 cursor-not-allowed flex items-center gap-1 shrink-0 self-start sm:self-auto"
+                title="Webhook regeneration is disabled in this environment"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Regenerate</span>
               </button>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between">
+            {/* Connected Repositories Row */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold text-slate-800">GitHub Enterprise Integration</p>
-                <p className="text-xs text-emerald-600 font-semibold mt-0.5">Connected (All 42 Repositories)</p>
+                <p className="text-sm font-bold text-slate-800">GitHub Repository Integrations</p>
+                <p className="text-xs text-emerald-600 font-semibold mt-0.5">
+                  {loadingProjects
+                    ? 'Checking repository connections...'
+                    : `${connectedReposCount} of ${projects.length} Repositories Connected`}
+                </p>
               </div>
-              <button className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white cursor-pointer">
-                Configure
+              <button
+                onClick={() => onNavigate('projects')}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white hover:border-slate-400 transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 self-start sm:self-auto shadow-sm"
+              >
+                <span>View Projects</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -318,29 +433,78 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       {activeTab === 'notifications' && (
         <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200/90 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">
-              Notification Preferences
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">
+                Notification Preferences
+              </h2>
+              {notifSaving && (
+                <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving...</span>
+                </div>
+              )}
+              {notifSaved && (
+                <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Saved ✓
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Choose when and how Aegis AI alerts you about potential risk bottlenecks.
+              Choose which events Aegis AI should remember as your alert preferences. Delivery channels (email, Slack) are configured separately and must be enabled in your organization settings.
             </p>
           </div>
 
+          {/* Load error warning */}
+          {notifLoadWarning && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-xs text-amber-800">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Could not load preferences from server. Displaying default settings.</span>
+            </div>
+          )}
+
+          {/* Save error alert */}
+          {notifError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2.5 text-xs text-rose-800">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{notifError}</span>
+            </div>
+          )}
+
           <div className="space-y-3">
-            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+            <label
+              className={`flex items-center justify-between p-3 rounded-xl border border-slate-200 transition-colors ${
+                notifSaving || notifLoading ? 'opacity-70 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50 cursor-pointer'
+              }`}
+            >
               <div>
                 <p className="text-sm font-semibold text-slate-800">High Risk Threshold Exceeded</p>
                 <p className="text-xs text-slate-500">Alert immediately when pull requests exceed 48h</p>
               </div>
-              <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded" />
+              <input
+                type="checkbox"
+                checked={notifPrefs.high_risk_threshold}
+                onChange={() => handleTogglePreference('high_risk_threshold')}
+                disabled={notifSaving || notifLoading}
+                className="w-4 h-4 text-indigo-600 rounded cursor-pointer disabled:cursor-not-allowed"
+              />
             </label>
 
-            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+            <label
+              className={`flex items-center justify-between p-3 rounded-xl border border-slate-200 transition-colors ${
+                notifSaving || notifLoading ? 'opacity-70 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50 cursor-pointer'
+              }`}
+            >
               <div>
                 <p className="text-sm font-semibold text-slate-800">Weekly Health Summary Digest</p>
                 <p className="text-xs text-slate-500">Receive comprehensive PDF report every Monday at 9 AM</p>
               </div>
-              <input type="checkbox" defaultChecked className="w-4 h-4 text-indigo-600 rounded" />
+              <input
+                type="checkbox"
+                checked={notifPrefs.weekly_digest}
+                onChange={() => handleTogglePreference('weekly_digest')}
+                disabled={notifSaving || notifLoading}
+                className="w-4 h-4 text-indigo-600 rounded cursor-pointer disabled:cursor-not-allowed"
+              />
             </label>
           </div>
         </div>

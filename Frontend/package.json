@@ -8,6 +8,7 @@
     "server": "node server/server.js",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -32,6 +33,11 @@
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.5",
     "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^2.1.8",
+    "jsdom": "^25.0.1",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/user-event": "^14.5.2"
   }
 }

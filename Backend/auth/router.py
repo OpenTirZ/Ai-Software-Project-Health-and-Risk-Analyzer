@@ -15,12 +15,14 @@ from Backend.auth.dependencies import get_current_user
 from Backend.auth.schemas import (
     LoginRequest,
     MessageResponse,
+    NotificationPreferences,
+    NotificationPreferencesUpdate,
     SignupRequest,
     TokenResponse,
     UserOut,
 )
 from Backend.auth.security import create_access_token, hash_password, verify_password
-from Backend.persistence import create_user, get_user_by_email, DatabaseError
+from Backend.persistence import create_user, get_user, get_user_by_email, update_user, DatabaseError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -170,3 +172,61 @@ def me(current_user: dict = Depends(get_current_user)):
     Requires: `Authorization: Bearer <token>` header.
     """
     return _build_user_out(current_user)
+
+
+# ---------------------------------------------------------------------------
+# Notification preferences: GET & PATCH /auth/me/settings
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/me/settings",
+    response_model=NotificationPreferences,
+    summary="Get the authenticated user's notification preferences",
+)
+def get_settings(current_user: dict = Depends(get_current_user)):
+    """
+    Returns the current user's notification preferences.
+    If preferences have not been explicitly saved yet, returns default preferences.
+    """
+    raw_prefs = current_user.get("notification_preferences")
+    if not isinstance(raw_prefs, dict):
+        return NotificationPreferences()
+    return NotificationPreferences(**raw_prefs)
+
+
+@router.patch(
+    "/me/settings",
+    response_model=NotificationPreferences,
+    summary="Update the authenticated user's notification preferences",
+)
+def update_settings(
+    payload: NotificationPreferencesUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Partially or fully update notification preferences.
+    Preserves existing preference values when omitted in the request.
+    Validates extra fields via extra='forbid'.
+    """
+    user_id = str(current_user["_id"])
+    existing_raw = current_user.get("notification_preferences")
+    existing_prefs = existing_raw if isinstance(existing_raw, dict) else {}
+
+    # Defaults baseline
+    merged = {
+        "high_risk_threshold": existing_prefs.get("high_risk_threshold", True),
+        "weekly_digest": existing_prefs.get("weekly_digest", True),
+    }
+
+    # Apply provided partial updates
+    update_data = payload.model_dump(exclude_unset=True)
+    merged.update(update_data)
+
+    try:
+        update_user(user_id, {"notification_preferences": merged})
+        fresh_user = get_user(user_id)
+    except DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    stored_raw = (fresh_user or {}).get("notification_preferences", merged)
+    return NotificationPreferences(**stored_raw)

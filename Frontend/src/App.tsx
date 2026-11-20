@@ -310,6 +310,8 @@ export function App() {
           onUpdateProfile={handleUpdateProfile}
           onLogout={handleLogout}
           onNavigate={setCurrentView}
+          projects={projects}
+          loadingProjects={loadingProjects}
         />
       )}
     </Layout>
