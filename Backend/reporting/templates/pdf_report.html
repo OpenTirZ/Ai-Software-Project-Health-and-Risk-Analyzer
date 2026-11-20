@@ -1,0 +1,282 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Project Health Report</title>
+
+    <style>
+        @page {
+            size: A4;
+            margin: 35px 40px;
+        }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            color: #263238;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .header {
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 14px;
+            margin-bottom: 22px;
+        }
+
+        h1 {
+            color: #172554;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        h2 {
+            color: #1e40af;
+            font-size: 15px;
+            border-bottom: 1px solid #dbeafe;
+            padding-bottom: 5px;
+            margin-top: 24px;
+        }
+
+        h3 {
+            font-size: 12px;
+            color: #334155;
+        }
+
+        .metadata {
+            color: #64748b;
+            font-size: 9px;
+        }
+
+        .health-card {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            padding: 12px;
+            margin: 15px 0;
+        }
+
+        .score {
+            font-size: 23px;
+            font-weight: bold;
+            color: #1d4ed8;
+        }
+
+        .summary {
+            background-color: #f8fafc;
+            padding: 12px;
+            border-left: 3px solid #2563eb;
+        }
+
+        .item {
+            padding: 7px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .priority {
+            color: #b45309;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 7px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #eff6ff;
+            color: #1e3a8a;
+        }
+
+        .empty {
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 8px;
+            border-top: 1px solid #cbd5e1;
+            color: #64748b;
+            font-size: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>{{ project_name }}</h1>
+        <div class="metadata">Project Health & Risk Analysis Report</div>
+        <div class="metadata">Generated: {{ generated_at }}</div>
+        <div class="metadata">Reporting period: {{ reporting_period }}</div>
+    </div>
+
+    <h2>Project Health Overview</h2>
+
+    <div class="health-card">
+        <div class="score">
+            {% if health_score is not none %}
+                {{ health_score }}/100
+            {% else %}
+                Not available
+            {% endif %}
+        </div>
+        <strong>Status:</strong> {{ health_status }}
+    </div>
+
+    <h2>Executive Summary</h2>
+
+    <div class="summary">
+        {{ executive_summary }}
+    </div>
+
+    <h2>Sprint Progress</h2>
+
+    {% if sprint_progress %}
+        <p>{{ sprint_progress }}</p>
+    {% else %}
+        <p class="empty">Sprint progress details are not available.</p>
+    {% endif %}
+
+    {% if milestones %}
+        <h3>Milestone Details</h3>
+
+        {% for row in milestones %}
+            <div class="item">
+                {% for field in row %}
+                    <strong>{{ field["label"] }}:</strong>
+                    {{ field["value"] }}<br>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <h2>Detected Bottlenecks</h2>
+
+    {% if bottlenecks %}
+        {% for row in bottlenecks %}
+            <div class="item">
+                {% for field in row %}
+                    <strong>{{ field["label"] }}:</strong>
+                    {{ field["value"] }}<br>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="empty">No bottleneck details available.</p>
+    {% endif %}
+
+    <h2>Detected Risks</h2>
+
+    {% if risks %}
+        {% for risk in risks %}
+            <div class="item">
+                {% if risk is mapping %}
+                    <strong>
+                        {{ risk.get("title", risk.get("risk_id", "Identified risk")) }}
+                    </strong>
+
+                    {% if risk.get("severity") %}
+                        <span class="priority">
+                            ({{ risk.get("severity") }})
+                        </span>
+                    {% endif %}
+
+                    <p>
+                        {{ risk.get("evidence", risk.get("description", "")) }}
+                    </p>
+
+                    {% if risk.get("recommendation") %}
+                        <p>
+                            Suggested action: {{ risk.get("recommendation") }}
+                        </p>
+                    {% endif %}
+                {% else %}
+                    {{ risk }}
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="empty">No risks recorded.</p>
+    {% endif %}
+
+    <h2>Workload Breakdown</h2>
+
+    {% if contributors %}
+        {% for row in contributors %}
+            <div class="item">
+                {% for field in row %}
+                    <strong>{{ field["label"] }}:</strong>
+                    {{ field["value"] }}<br>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="empty">Contributor workload details are not available.</p>
+    {% endif %}
+
+    <h2>Project Metrics</h2>
+
+    {% if metric_sections %}
+        {% for section in metric_sections %}
+            <h3>{{ section["name"] }}</h3>
+
+            {% if section["values"] %}
+                <table>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+
+                    {% for metric in section["values"] %}
+                        <tr>
+                            <td>{{ metric["label"] }}</td>
+                            <td>{{ metric["value"] }}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            {% else %}
+                <p class="empty">No metric values available.</p>
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        <p class="empty">No project metrics available.</p>
+    {% endif %}
+
+    <h2>AI Recommendations</h2>
+
+    {% if recommendations %}
+        {% for recommendation in recommendations %}
+            <div class="item">
+                <strong>{{ recommendation["title"] }}</strong>
+
+                <p>
+                    <span class="priority">Priority:</span>
+                    {{ recommendation["priority"] }}
+                </p>
+
+                <p>
+                    <strong>Action:</strong>
+                    {{ recommendation["action"] }}
+                </p>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="empty">No recommendations recorded.</p>
+    {% endif %}
+
+    <div class="footer">
+        Generated by AI Software Project Health & Risk Analyzer
+        <br>
+        This report reflects the data available at generation time.
+    </div>
+
+</body>
+</html>
