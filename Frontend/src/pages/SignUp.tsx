@@ -28,15 +28,10 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
 
   const checkEmailDomainLive = async (emailToCheck: string): Promise<boolean> => {
     const trimmed = emailToCheck.trim();
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(trimmed)) {
-      setDomainVerified(null);
-      return false;
-    }
-
-    setIsCheckingDomain(true);
+    // Format check is now handled inside verifyEmailDomain (no external network call)
+    setIsCheckingDomain(false);
     try {
-      const result = await verifyEmailDomain(trimmed);
+      const result = verifyEmailDomain(trimmed);
       if (!result.isValid) {
         setDomainVerified(false);
         setErrors((prev) => ({ ...prev, email: result.reason }));
@@ -49,8 +44,6 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
     } catch {
       setDomainVerified(null);
       return true;
-    } finally {
-      setIsCheckingDomain(false);
     }
   };
 
