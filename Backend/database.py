@@ -66,6 +66,9 @@ integration_credentials_collection = db["integration_credentials"]
 org_settings_collection = db["org_settings"]
 audit_logs_collection = db["audit_logs"]
 contributors_collection = db["contributors"]
+milestones_collection = db["milestones"]
+metric_snapshots_collection = db["metric_snapshots"]
+report_schedules_collection = db["report_schedules"]
 
 
 # ---------------------------------------------------------------------------
@@ -82,12 +85,44 @@ def ensure_indexes():
     allowing the same GitHub user across different projects.
 
     Commits: unique compound index on (projectId, sha)
+    Pull Requests: unique compound index on (projectId, number) [UNIQUE]
+    Issues: unique compound index on (projectId, number) [UNIQUE]
+    Milestones: unique compound index on (projectId, milestone_id) [UNIQUE]
+    Metric Snapshots: compound index on (projectId, calculatedAt)
     to prevent duplicate commits within the same project.
+
+    Issues: unique compound index on (projectId, github_id) so repeated
+    GitHub issue synchronization cannot create duplicate issues.
+
+    Reports: compound index on (projectId, generatedAt: -1) so per-project
+    report history listings read newest-first directly from the index.
+
+    Report Schedules: compound index on (projectId, status) for schedule
+    lookups per project filtered by active/paused status.
     """
     try:
         contributors_collection.create_index(
             [("projectId", 1), ("github_username", 1)],
             unique=True,
+            background=True,
+        )
+        pull_requests_collection.create_index(
+            [("projectId", 1), ("number", 1)],
+            unique=True,
+            background=True,
+        )
+        issues_collection.create_index(
+            [("projectId", 1), ("number", 1)],
+            unique=True,
+            background=True,
+        )
+        milestones_collection.create_index(
+            [("projectId", 1), ("milestone_id", 1)],
+            unique=True,
+            background=True,
+        )
+        metric_snapshots_collection.create_index(
+            [("projectId", 1), ("calculatedAt", 1)],
             background=True,
         )
         commits_collection.create_index(
@@ -101,6 +136,25 @@ def ensure_indexes():
         )
         projects_collection.create_index(
             [("members.userId", 1)],
+            background=True,
+        )
+        # Issues: one document per (projectId, github_id). The partial filter
+        # ignores legacy issue documents that have no github_id, so creating
+        # this index can never fail because of older manually-created data.
+        issues_collection.create_index(
+            [("projectId", 1), ("github_id", 1)],
+            unique=True,
+            background=True,
+            partialFilterExpression={"github_id": {"$exists": True}},
+        )
+        # Reports: newest-first history per project (projectId, generatedAt DESC).
+        reports_collection.create_index(
+            [("projectId", 1), ("generatedAt", -1)],
+            background=True,
+        )
+        # Report schedules: per-project status lookups for the scheduler.
+        report_schedules_collection.create_index(
+            [("projectId", 1), ("status", 1)],
             background=True,
         )
         logger.info("Database indexes ensured.")

@@ -1,0 +1,463 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
+  <title>Aegis AI Project Health Report - {{ project_name|e }}</title>
+  <style type="text/css">
+    /* Base resets */
+    body, table, td, a {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table, td {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+    }
+    body {
+      height: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      background-color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #334155;
+    }
+    /* Responsive styles */
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .stack-column {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        direction: ltr !important;
+      }
+      .mobile-padding {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+      }
+      .hero-score-cell {
+        font-size: 32px !important;
+      }
+      .metric-cell {
+        display: block !important;
+        width: 100% !important;
+        margin-bottom: 12px !important;
+      }
+    }
+    /* Dark mode enhancements */
+    @media (prefers-color-scheme: dark) {
+      body, .email-bg {
+        background-color: #0b0f19 !important;
+      }
+      .content-card {
+        background-color: #1e293b !important;
+        border-color: #334155 !important;
+      }
+      .card-header {
+        background-color: #0f172a !important;
+        border-bottom-color: #334155 !important;
+      }
+      .text-primary {
+        color: #f8fafc !important;
+      }
+      .text-secondary {
+        color: #94a3b8 !important;
+      }
+      .text-muted {
+        color: #64748b !important;
+      }
+      .metric-box {
+        background-color: #0f172a !important;
+        border-color: #334155 !important;
+      }
+      .table-row-alt {
+        background-color: #1a2234 !important;
+      }
+      .border-divider {
+        border-color: #334155 !important;
+      }
+      .footer-section {
+        background-color: #0b0f19 !important;
+        color: #64748b !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <!-- Hidden Preheader snippet for email inbox preview -->
+  <div style="display: none; font-size: 1px; color: #0f172a; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    Executive Health Assessment for {{ project_name|e }}: Status {{ (health_summary.status or health_summary.health_status or 'Unknown')|upper }} - Health Score {{ health_summary.health_score or health_summary.score or 'N/A' }}/100. Attached: PDF Report.
+    &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
+  </div>
+
+  <!-- Outer wrapper table -->
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" class="email-bg" style="background-color: #0f172a; table-layout: fixed;">
+    <tr>
+      <td align="center" style="padding: 24px 12px 40px 12px;">
+        <!-- Email Container -->
+        <table border="0" cellpadding="0" cellspacing="0" width="600" class="email-container" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);">
+          
+          <!-- BRAND HEADER -->
+          <tr>
+            <td class="card-header" style="background-color: #1e1b4b; background-image: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%); padding: 32px 28px; text-align: left;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td>
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="background-color: #6366f1; border-radius: 8px; width: 36px; height: 36px; text-align: center; vertical-align: middle;">
+                          <span style="color: #ffffff; font-size: 20px; font-weight: 800; font-family: monospace; line-height: 36px; display: inline-block;">&#9650;</span>
+                        </td>
+                        <td style="padding-left: 14px;">
+                          <div style="font-size: 20px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 24px;">
+                            AEGIS <span style="color: #a5b4fc; font-weight: 400;">AI</span>
+                          </div>
+                          <div style="font-size: 11px; font-weight: 600; color: #c7d2fe; text-transform: uppercase; letter-spacing: 1.2px; line-height: 14px;">
+                            Software Health &amp; Risk Intelligence
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td align="right" style="vertical-align: top;">
+                    <span style="display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; background-color: rgba(255, 255, 255, 0.15); color: #e0e7ff; letter-spacing: 0.5px;">
+                      {{ report_date|default('Executive Briefing') }}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- PROJECT SUMMARY BANNER -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 20px 28px; border-bottom: 1px solid #e2e8f0;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td>
+                    <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">
+                      Target Repository / Project
+                    </div>
+                    <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; line-height: 28px;">
+                      {{ project_name|e }}
+                    </div>
+                  </td>
+                  {% if health_summary.branch %}
+                  <td align="right" style="vertical-align: bottom;">
+                    <span style="font-size: 12px; font-family: monospace; color: #475569; background-color: #e2e8f0; padding: 4px 8px; border-radius: 4px;">
+                      git:{{ health_summary.branch|e }}
+                    </span>
+                  </td>
+                  {% endif %}
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- EXECUTIVE OVERVIEW CARD -->
+          <tr>
+            <td style="padding: 28px 28px 20px 28px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden;">
+                <tr>
+                  <td style="padding: 24px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <!-- Score Display -->
+                        <td width="45%" style="vertical-align: middle; border-right: 1px solid #cbd5e1; padding-right: 20px;">
+                          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px;">
+                            Overall Health Score
+                          </div>
+                          <div class="hero-score-cell" style="font-size: 44px; font-weight: 900; line-height: 48px; margin-top: 6px; color: {% if health_summary.health_score is defined and health_summary.health_score is not none %}{% if health_summary.health_score >= 80 %}#059669{% elif health_summary.health_score >= 60 %}#d97706{% else %}#dc2626{% endif %}{% else %}#475569{% endif %};">
+                            {% if health_summary.health_score is defined and health_summary.health_score is not none %}
+                              {{ "%.1f"|format(health_summary.health_score) if health_summary.health_score is number else health_summary.health_score }}
+                            {% elif health_summary.score is defined and health_summary.score is not none %}
+                              {{ "%.1f"|format(health_summary.score) if health_summary.score is number else health_summary.score }}
+                            {% else %}
+                              --
+                            {% endif %}
+                            <span style="font-size: 18px; font-weight: 600; color: #94a3b8;">/100</span>
+                          </div>
+                          <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                            {% if health_summary.score_delta is defined and health_summary.score_delta is not none %}
+                              {% if health_summary.score_delta > 0 %}
+                                <span style="color: #059669; font-weight: 700;">&#9650; +{{ "%.1f"|format(health_summary.score_delta) }}</span> vs previous sprint
+                              {% elif health_summary.score_delta < 0 %}
+                                <span style="color: #dc2626; font-weight: 700;">&#9660; {{ "%.1f"|format(health_summary.score_delta) }}</span> vs previous sprint
+                              {% else %}
+                                <span style="color: #64748b; font-weight: 600;">&#9644; 0.0</span> unchanged vs previous sprint
+                              {% endif %}
+                            {% else %}
+                              Automated telemetry assessment
+                            {% endif %}
+                          </div>
+                        </td>
+
+                        <!-- Status & Risk Level -->
+                        <td width="55%" style="vertical-align: middle; padding-left: 20px;">
+                          <!-- Health Status Badge -->
+                          <div style="margin-bottom: 12px;">
+                            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; display: block; margin-bottom: 4px;">
+                              Project Status
+                            </span>
+                            {% set raw_status = (health_summary.status or health_summary.health_status or 'UNKNOWN')|string|upper %}
+                            {% if 'GOOD' in raw_status or 'HEALTHY' in raw_status %}
+                              <span style="display: inline-block; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 800; background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; text-transform: uppercase; letter-spacing: 0.5px;">
+                                &#10004; {{ raw_status }}
+                              </span>
+                            {% elif 'CAUTION' in raw_status or 'MODERATE' in raw_status or 'WARNING' in raw_status %}
+                              <span style="display: inline-block; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 800; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; text-transform: uppercase; letter-spacing: 0.5px;">
+                                &#9888; {{ raw_status }}
+                              </span>
+                            {% else %}
+                              <span style="display: inline-block; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 800; background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; text-transform: uppercase; letter-spacing: 0.5px;">
+                                &#10006; {{ raw_status }}
+                              </span>
+                            {% endif %}
+                          </div>
+
+                          <!-- Risk Assessment Level -->
+                          <div>
+                            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.8px; display: block; margin-bottom: 4px;">
+                              Overall Risk Level
+                            </span>
+                            {% set risk_level = (health_summary.risk_level or health_summary.risk or 'MODERATE')|string|upper %}
+                            <span style="font-size: 13px; font-weight: 700; color: {% if 'LOW' in risk_level %}#059669{% elif 'MEDIUM' in risk_level or 'MODERATE' in risk_level %}#d97706{% else %}#dc2626{% endif %};">
+                              &#9679; {{ risk_level }}
+                            </span>
+                            {% if health_summary.active_flags_count is defined %}
+                              <span style="font-size: 12px; color: #64748b; margin-left: 6px;">
+                                ({{ health_summary.active_flags_count }} active risk indicators)
+                              </span>
+                            {% endif %}
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- EXECUTIVE SUMMARY STATEMENT -->
+          <tr>
+            <td style="padding: 0 28px 24px 28px;">
+              <div style="font-size: 14px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                Executive Summary
+              </div>
+              <div style="font-size: 14px; line-height: 22px; color: #475569; background-color: #ffffff; border-left: 4px solid #6366f1; padding: 12px 16px; border-radius: 0 6px 6px 0; background: #faf5ff;">
+                {{ (health_summary.executive_summary or health_summary.summary_statement or health_summary.summary or 'Automated telemetry analysis has completed for this repository cycle. Key operational indicators, pull request velocity, and risk items are detailed below.')|e }}
+              </div>
+            </td>
+          </tr>
+
+          <!-- PRIMARY DASHBOARD CTA BUTTON -->
+          <tr>
+            <td align="center" style="padding: 8px 28px 28px 28px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center" style="background-color: #4338ca; border-radius: 8px; box-shadow: 0 4px 12px rgba(67, 56, 202, 0.35);">
+                    <a href="{{ dashboard_url|e }}" target="_blank" rel="noopener noreferrer" style="display: block; padding: 16px 24px; font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; text-align: center; letter-spacing: 0.3px;">
+                      Open Interactive Health Dashboard &rarr;
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top: 10px;">
+                    <span style="font-size: 11px; color: #64748b;">
+                      Direct Link: <a href="{{ dashboard_url|e }}" style="color: #4f46e5; word-break: break-all; text-decoration: underline;">{{ dashboard_url|e }}</a>
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- KEY METRICS GRID -->
+          {% if health_summary.metrics is defined and health_summary.metrics %}
+          <tr>
+            <td style="padding: 0 28px 24px 28px;">
+              <div style="font-size: 14px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                Key Telemetry Metrics
+              </div>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  {% for key, val in health_summary.metrics.items() %}
+                    {% if loop.index0 % 2 == 0 and not loop.first %}
+                      </tr><tr>
+                    {% endif %}
+                    <td class="metric-cell" width="48%" style="padding: 6px; vertical-align: top;">
+                      <div class="metric-box" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+                          {{ key|replace('_', ' ')|title|e }}
+                        </div>
+                        <div style="font-size: 18px; font-weight: 800; color: #0f172a; margin-top: 4px;">
+                          {{ val|e }}
+                        </div>
+                      </div>
+                    </td>
+                    {% if loop.index0 % 2 == 0 and not loop.last %}
+                      <td width="4%" style="font-size: 1px;">&nbsp;</td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+              </table>
+            </td>
+          </tr>
+          {% endif %}
+
+          <!-- TOP ACTIVE RISKS & BOTTLENECKS -->
+          {% set risks = health_summary.active_risks or health_summary.risks or health_summary.active_flags or [] %}
+          <tr>
+            <td style="padding: 0 28px 24px 28px;">
+              <div style="font-size: 14px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                Top Active Risks &amp; Bottlenecks
+              </div>
+              {% if risks and risks|length > 0 %}
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: separate; border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                  {% for risk in risks %}
+                    {% set severity = (risk.severity or risk.level or 'info')|string|lower %}
+                    <tr class="{% if loop.index % 2 == 0 %}table-row-alt{% endif %}" style="background-color: {% if loop.index % 2 == 0 %}#f8fafc{% else %}#ffffff{% endif %}; border-bottom: 1px solid #e2e8f0;">
+                      <td style="padding: 12px 14px; vertical-align: top; width: 85px;">
+                        {% if 'high' in severity or 'critical' in severity %}
+                          <span style="display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; background-color: #fee2e2; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px;">
+                            {{ severity|upper }}
+                          </span>
+                        {% elif 'med' in severity or 'warn' in severity %}
+                          <span style="display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; background-color: #fef3c7; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px;">
+                            {{ severity|upper }}
+                          </span>
+                        {% else %}
+                          <span style="display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; background-color: #e0f2fe; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px;">
+                            {{ severity|upper }}
+                          </span>
+                        {% endif %}
+                      </td>
+                      <td style="padding: 12px 14px; vertical-align: top;">
+                        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">
+                          {{ (risk.title or risk.type or risk.name or 'Operational Risk')|e }}
+                        </div>
+                        <div style="font-size: 12px; color: #475569; margin-top: 3px; line-height: 18px;">
+                          {{ (risk.message or risk.description or risk.detail or '')|e }}
+                        </div>
+                        {% if risk.impact %}
+                          <div style="font-size: 11px; color: #dc2626; margin-top: 4px; font-weight: 600;">
+                            Impact: {{ risk.impact|e }}
+                          </div>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </table>
+              {% else %}
+                <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 16px; text-align: left;">
+                  <span style="color: #166534; font-size: 13px; font-weight: 600;">
+                    &#10004; No active critical bottlenecks or risk flags recorded for this cycle. All operational parameters within healthy limits.
+                  </span>
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- STRATEGIC RECOMMENDATIONS -->
+          {% set recs = health_summary.recommendations or health_summary.action_items or [] %}
+          {% if recs and recs|length > 0 %}
+          <tr>
+            <td style="padding: 0 28px 24px 28px;">
+              <div style="font-size: 14px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                Recommended Engineering Actions
+              </div>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px;">
+                {% for rec in recs %}
+                <tr>
+                  <td style="padding: 8px 6px; vertical-align: top; width: 22px;">
+                    <span style="color: #6366f1; font-size: 14px; font-weight: bold;">&bull;</span>
+                  </td>
+                  <td style="padding: 8px 6px; vertical-align: top;">
+                    {% if rec is mapping %}
+                      <div style="font-size: 13px; font-weight: 700; color: #1e293b;">
+                        {{ (rec.action or rec.title or 'Recommendation')|e }}
+                      </div>
+                      <div style="font-size: 12px; color: #475569; margin-top: 2px;">
+                        {{ (rec.detail or rec.description or rec.reason or '')|e }}
+                      </div>
+                    {% else %}
+                      <div style="font-size: 13px; color: #334155; line-height: 18px;">
+                        {{ rec|e }}
+                      </div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+          {% endif %}
+
+          <!-- ATTACHMENT CALLOUT BOX -->
+          <tr>
+            <td style="padding: 0 28px 28px 28px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #eef2ff; border: 1px dashed #6366f1; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td width="36" style="vertical-align: middle;">
+                          <div style="background-color: #4338ca; width: 32px; height: 32px; border-radius: 6px; text-align: center; line-height: 32px; color: #ffffff; font-size: 16px; font-weight: bold;">
+                            &#128196;
+                          </div>
+                        </td>
+                        <td style="padding-left: 12px; vertical-align: middle;">
+                          <div style="font-size: 13px; font-weight: 700; color: #1e1b4b;">
+                            Detailed PDF Report Attached
+                          </div>
+                          <div style="font-size: 12px; color: #4338ca; margin-top: 2px;">
+                            Attachment: <strong style="font-family: monospace;">{{ pdf_filename|default('report.pdf')|e }}</strong> &mdash; Download for full telemetry charts, contributor metrics, and complete audit trail.
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td class="footer-section" style="background-color: #0f172a; padding: 24px 28px; text-align: center; border-top: 1px solid #1e293b;">
+              <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; letter-spacing: 0.5px;">
+                AEGIS AI &bull; Project Health &amp; Risk Analyzer
+              </div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 6px; line-height: 16px;">
+                Generated automatically by the Aegis AI automated notification subsystem.<br />
+                Delivery Timestamp: {{ generated_at|default('UTC') }} &bull; Project: {{ project_name|e }}
+              </div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 12px; line-height: 14px;">
+                This communication contains confidential project telemetry intended solely for authorized team members.
+                If you received this in error, please notify your system administrator.
+              </div>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Email Container -->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

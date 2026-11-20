@@ -87,7 +87,7 @@ def _is_project_member(project: dict, user_id: str) -> bool:
 def create_project_endpoint(
     payload: CreateProjectRequest,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
     """
