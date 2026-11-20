@@ -109,14 +109,11 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
         branch: targetBranch,
       });
 
-      // Construct Repository object for application state
+      // Construct Repository object for application state without fabricated metrics
       const newRepo: Repository = {
         id: repoResponse.id,
         name: repoResponse.repoName,
         branch: repoResponse.branch,
-        healthScore: 88,
-        riskClassification: 'LOW RISK',
-        lastAudit: 'Just now',
         description: `Connected to project "${projectName}". Real-time telemetry enabled.`,
         monitored: true,
       };

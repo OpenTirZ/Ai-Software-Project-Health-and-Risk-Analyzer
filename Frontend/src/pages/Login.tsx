@@ -56,7 +56,6 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
     setIsLoading(true);
     try {
       const response = await authApi.login(email, password);
-      localStorage.setItem('aegis_token', response.token);
       onLoginSuccess(response.user);
     } catch (err: any) {
       setApiError(err.message || 'An error occurred during sign in. Please try again.');
