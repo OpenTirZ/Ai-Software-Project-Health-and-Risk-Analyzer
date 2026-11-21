@@ -26,6 +26,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from Backend.auth.lifecycle import router as lifecycle_router
 from Backend.auth.router import router as auth_router
 from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
@@ -171,6 +172,7 @@ app.include_router(data_sync_router)
 app.include_router(threshold_router)
 app.include_router(metric_router)
 app.include_router(report_router)
+app.include_router(lifecycle_router)
 
 
 # ---------------------------------------------------------------------------

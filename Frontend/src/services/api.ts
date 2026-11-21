@@ -719,32 +719,40 @@ export const repositoryApi = {
   },
 
   /**
-   * Fetch branches directly from GitHub REST API
+   * Fetch branches by proxying through the backend endpoint GET /api/repositories/branches
+   * Avoids exhausting client-side GitHub unauthenticated rate limits.
    */
   async fetchBranches(githubUrl: string): Promise<{ branches: string[]; source: 'github' | 'default' }> {
     const cleanUrl = githubUrl.trim().replace(/\/+$/, '');
-    const match = cleanUrl.match(/github\.com\/([^/]+)\/([^/]+)/i);
-    if (!match) {
-      return { branches: ['main', 'master', 'develop'], source: 'default' };
+    if (!cleanUrl) {
+      return { branches: ['main', 'master', 'develop', 'staging', 'production'], source: 'default' };
     }
 
-    const owner = match[1];
-    const repo = match[2].replace(/\.git$/, '');
-
     try {
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=50`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      });
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${API_BASE_URL}/repositories/branches?url=${encodeURIComponent(cleanUrl)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const names = data.map((b: any) => b.name);
-          return { branches: names, source: 'github' };
+        if (data && Array.isArray(data.branches) && data.branches.length > 0) {
+          return {
+            branches: data.branches,
+            source: data.source === 'github' ? 'github' : 'default',
+          };
         }
+      } else {
+        console.warn(`Backend branch proxy returned status ${response.status}`);
       }
     } catch (err) {
-      console.warn('Could not fetch branches from GitHub API, using standard branch list.', err);
+      console.warn('Could not fetch branches via backend proxy, using standard branch list.', err);
     }
 
     return { branches: ['main', 'master', 'develop', 'staging', 'production'], source: 'default' };
