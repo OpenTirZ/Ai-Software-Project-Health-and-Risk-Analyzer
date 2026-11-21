@@ -287,6 +287,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
                   onClick={() => setShowPassword(!showPassword)}
                   className="pr-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
                   title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5 text-slate-500" />
@@ -331,6 +332,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="pr-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
                   title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-5 h-5 text-slate-500" />
