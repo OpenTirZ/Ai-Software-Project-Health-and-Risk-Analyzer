@@ -88,8 +88,9 @@ function extractErrorMessage(errData: any, fallback: string): string {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const DOMAIN_CACHE = new Map<string, boolean>();
-
+// ---------------------------------------------------------------------------
+// Disposable email domain blocklist (client-side only — no external DNS calls)
+// ---------------------------------------------------------------------------
 const DISPOSABLE_DOMAINS = new Set([
   'mailinator.com',
   'tempmail.com',
@@ -103,18 +104,38 @@ const DISPOSABLE_DOMAINS = new Set([
   'getairmail.com',
 ]);
 
+// RFC 5322-compatible lightweight email format regex (client-side structural check)
+const EMAIL_FORMAT_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 /**
- * Level 1 Verification: Checks if the email domain actually exists and has active MX records
+ * Client-side email validation.
+ *
+ * Performs two fast, privacy-preserving checks with no external network calls:
+ *   1. RFC 5322 structural format check via regex.
+ *   2. Disposable/temporary domain blocklist lookup.
+ *
+ * Full domain-existence (MX record) validation is intentionally delegated to
+ * the backend at POST /api/auth/signup, which performs the check server-side
+ * without exposing user email domains to third-party DNS resolvers.
+ *
+ * SECURITY NOTE: The previous implementation queried
+ * https://cloudflare-dns.com/dns-query directly from the browser, leaking
+ * every registering user's email domain to Cloudflare and adding up to 3.5 s
+ * of latency. That approach also silently bypassed the check on network
+ * failure, making it ineffective. This replacement is synchronous, instant,
+ * and keeps user data on the first-party connection only.
  */
-export async function verifyEmailDomain(email: string): Promise<{ isValid: boolean; reason?: string }> {
-  const parts = email.trim().split('@');
-  if (parts.length !== 2 || !parts[1]) {
+export function verifyEmailDomain(email: string): { isValid: boolean; reason?: string } {
+  const trimmed = email.trim();
+
+  // 1. Structural format check
+  if (!EMAIL_FORMAT_RE.test(trimmed)) {
     return { isValid: false, reason: 'Invalid email address structure.' };
   }
 
-  const domain = parts[1].toLowerCase().trim();
+  const domain = trimmed.split('@')[1].toLowerCase();
 
-  // 1. Reject disposable temporary domains
+  // 2. Disposable domain blocklist
   if (DISPOSABLE_DOMAINS.has(domain)) {
     return {
       isValid: false,
@@ -122,56 +143,7 @@ export async function verifyEmailDomain(email: string): Promise<{ isValid: boole
     };
   }
 
-  // 2. Check memory cache for fast response
-  if (DOMAIN_CACHE.has(domain)) {
-    const cached = DOMAIN_CACHE.get(domain)!;
-    return {
-      isValid: cached,
-      reason: cached ? undefined : `The domain "${domain}" does not exist or has no active mail servers.`,
-    };
-  }
-
-  // 3. Query Cloudflare DNS over HTTPS for live Mail Exchange (MX) records
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`, {
-      headers: { Accept: 'application/dns-json' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.Status === 0 && Array.isArray(data.Answer) && data.Answer.length > 0) {
-        DOMAIN_CACHE.set(domain, true);
-        return { isValid: true };
-      }
-
-      // Fallback check for A record
-      const aResponse = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, {
-        headers: { Accept: 'application/dns-json' },
-      });
-      if (aResponse.ok) {
-        const aData = await aResponse.json();
-        if (aData.Status === 0 && Array.isArray(aData.Answer) && aData.Answer.length > 0) {
-          DOMAIN_CACHE.set(domain, true);
-          return { isValid: true };
-        }
-      }
-
-      DOMAIN_CACHE.set(domain, false);
-      return {
-        isValid: false,
-        reason: `The email domain "${domain}" does not exist or has no active mail servers.`,
-      };
-    }
-  } catch (err) {
-    console.warn('DNS lookup failed or timed out, skipping domain block.', err);
-    return { isValid: true };
-  }
-
+  // Domain-existence check (MX records) is handled server-side at signup.
   return { isValid: true };
 }
 

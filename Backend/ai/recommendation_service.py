@@ -291,7 +291,12 @@ def generate_recommendations(
                 raise ValueError("LLM output contains non-advisory or autonomous-action language.")
         return returned
     except (Exception, LLMOutputError) as exc:
-        logger.warning("LLM recommendation personalization failed; using grounded advice: %s", exc)
+        # Log only the exception type to avoid leaking sensitive values (e.g. API keys)
+        # that may appear in the exception message string.
+        logger.warning(
+            "LLM recommendation personalization failed; using grounded advice: %s",
+            type(exc).__name__,
+        )
         return grounded
 
 
