@@ -1,7 +1,7 @@
 """
 Pydantic schemas for auth endpoints.
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # ---------------------------------------------------------------------------
@@ -39,3 +39,21 @@ class TokenResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Notification preferences schemas
+# ---------------------------------------------------------------------------
+
+class NotificationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    high_risk_threshold: bool = True
+    weekly_digest: bool = True
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    high_risk_threshold: bool | None = None
+    weekly_digest: bool | None = None
