@@ -114,6 +114,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         .toUpperCase()
     : 'U';
 
+  // Map raw role value → display label & colours
+  const ROLE_META: Record<string, { label: string; className: string }> = {
+    admin: {
+      label: 'Admin',
+      className: 'bg-purple-950 text-purple-300 border border-purple-700/60',
+    },
+    project_manager: {
+      label: 'Project Manager',
+      className: 'bg-blue-950 text-blue-300 border border-blue-700/60',
+    },
+    developer: {
+      label: 'Developer',
+      className: 'bg-indigo-950 text-indigo-300 border border-indigo-700/60',
+    },
+  };
+  const roleMeta = ROLE_META[profile.role?.toLowerCase() ?? ''] ?? {
+    label: profile.role || 'Team Member',
+    className: 'bg-indigo-950 text-indigo-300 border border-indigo-700/60',
+  };
+
   const handleSave = () => {
     setIsEditing(false);
     const cleanUsername = profile.username.trim()
@@ -189,8 +209,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 <h1 className="text-2xl font-bold tracking-tight">
                   {profile.fullName}
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-indigo-950 text-indigo-300 border border-indigo-700/60">
-                  TEAM ADMIN
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase ${roleMeta.className}`}>
+                  {roleMeta.label}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">

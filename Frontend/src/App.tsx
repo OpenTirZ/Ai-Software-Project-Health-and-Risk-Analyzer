@@ -14,6 +14,7 @@ import { Contributors } from './pages/Contributors';
 import { Activity } from './pages/Activity';
 import { Reports } from './pages/Reports';
 import { UserProfile } from './pages/UserProfile';
+import { AdminPanel } from './pages/AdminPanel';
 
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -197,6 +198,16 @@ export function App() {
     setCurrentView('login');
   };
 
+  // Guard: redirect non-admins away from the admin view
+  const handleNavigate = (view: PageView) => {
+    if (view === 'admin' && currentUser?.role !== 'admin') {
+      alert('Access denied. Admin privileges required.');
+      setCurrentView('overview');
+      return;
+    }
+    setCurrentView(view);
+  };
+
   // Full-screen auth views: Entry point is always Login / SignUp until authenticated
   if (!isAuthenticated || currentView === 'login' || currentView === 'signup') {
     if (currentView === 'signup') {
@@ -231,7 +242,7 @@ export function App() {
       activeProject={activeProject}
       currentUser={currentUser}
       onSelectProject={handleSelectProject}
-      onNavigate={setCurrentView}
+      onNavigate={handleNavigate}
       onLogout={handleLogout}
       onSyncAll={handleSyncAllActive}
       isSyncing={isGlobalSyncing}
@@ -240,7 +251,7 @@ export function App() {
         <Projects
           projects={projects}
           onSelectProject={handleSelectProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
           onRefreshProjects={loadProjects}
         />
       )}
@@ -248,7 +259,7 @@ export function App() {
       {currentView === 'create-project' && (
         <CreateProject
           onProjectCreated={handleProjectCreated}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
@@ -256,14 +267,14 @@ export function App() {
         <ConnectRepository
           project={activeProject}
           onRepoConnected={handleRepoConnected}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
       {currentView === 'overview' && (
         <ProjectOverview
           project={activeProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
           onRefreshProject={loadProjects}
         />
       )}
@@ -271,28 +282,28 @@ export function App() {
       {currentView === 'health-analysis' && (
         <HealthAnalysis
           project={activeProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
       {currentView === 'risk-analysis' && (
         <RiskAnalysis
           project={activeProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
       {currentView === 'contributors' && (
         <Contributors
           project={activeProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
       {currentView === 'activity' && (
         <Activity
           project={activeProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
@@ -300,7 +311,7 @@ export function App() {
         <Reports
           selectedRepo={activeProject?.name || 'Project'}
           project={activeProject}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
         />
       )}
 
@@ -309,10 +320,15 @@ export function App() {
           currentUser={currentUser}
           onUpdateProfile={handleUpdateProfile}
           onLogout={handleLogout}
-          onNavigate={setCurrentView}
+          onNavigate={handleNavigate}
           projects={projects}
           loadingProjects={loadingProjects}
         />
+      )}
+
+      {/* Admin Panel — only rendered when user is admin (guard already enforced by handleNavigate) */}
+      {currentView === 'admin' && currentUser?.role === 'admin' && (
+        <AdminPanel />
       )}
     </Layout>
   );
