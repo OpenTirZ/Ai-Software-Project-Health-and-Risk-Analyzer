@@ -100,6 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
         <button
           onClick={() => onNavigate('profile')}
           className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 transition-colors text-left cursor-pointer"
+          aria-label={`View profile for ${displayName}`}
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
             {initials}
@@ -118,6 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
         <button
           onClick={onLogout}
           className="mt-2.5 w-full flex items-center justify-center gap-2 py-1.5 text-xs font-medium text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+          aria-label="Logout"
         >
           <LogOut className="w-3.5 h-3.5" />
           <span>Logout</span>
