@@ -135,7 +135,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Email Field */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="login-email" className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
                 Email address
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -145,6 +145,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
                   <Mail className={`w-5 h-5 ${errors.email ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="login-email"
                   type="email"
                   disabled={isLoading}
                   value={email}
@@ -166,7 +167,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
 
             {/* Password Field */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="login-password" className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
                 Password
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -176,6 +177,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
                   <Lock className={`w-5 h-5 ${errors.password ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   disabled={isLoading}
                   value={password}

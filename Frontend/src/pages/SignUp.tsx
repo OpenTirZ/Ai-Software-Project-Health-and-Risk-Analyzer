@@ -182,7 +182,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
           <form onSubmit={handleSubmit} className="space-y-3.5" noValidate>
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="signup-name" className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
                 Full name
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -192,6 +192,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
                   <User className={`w-5 h-5 ${errors.name ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="signup-name"
                   type="text"
                   disabled={isLoading}
                   value={name}
@@ -213,7 +214,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
 
             {/* Email Address */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="signup-email" className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
                 Email address
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -223,6 +224,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
                   <Mail className={`w-5 h-5 ${errors.email ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="signup-email"
                   type="email"
                   disabled={isLoading}
                   value={email}
@@ -259,7 +261,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="signup-password" className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
                 Password
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -269,6 +271,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
                   <Lock className={`w-5 h-5 ${errors.password ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="signup-password"
                   type={showPassword ? 'text' : 'password'}
                   disabled={isLoading}
                   value={password}
@@ -302,7 +305,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-slate-900 mb-1 font-['Playpen_Sans',cursive,sans-serif]">
                 Confirm Password
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -312,6 +315,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigate, onSignUpSuccess }) =
                   <Lock className={`w-5 h-5 ${errors.confirmPassword ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="signup-confirm-password"
                   type={showConfirmPassword ? 'text' : 'password'}
                   disabled={isLoading}
                   value={confirmPassword}
