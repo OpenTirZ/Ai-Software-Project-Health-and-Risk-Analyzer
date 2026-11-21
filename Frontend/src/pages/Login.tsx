@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PageView } from '../types';
 import { Mail, Lock, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../services/api';
@@ -12,12 +12,12 @@ interface LoginProps {
 
 export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initialEmail, successMessage }) => {
   const [email, setEmail] = useState(initialEmail || '');
-  const [prevInitialEmail, setPrevInitialEmail] = useState(initialEmail);
 
-  if (initialEmail !== prevInitialEmail) {
-    setPrevInitialEmail(initialEmail);
-    setEmail(initialEmail || '');
-  }
+  useEffect(() => {
+    if (initialEmail !== undefined) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
