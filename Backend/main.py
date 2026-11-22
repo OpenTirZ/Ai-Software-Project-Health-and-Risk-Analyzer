@@ -38,6 +38,7 @@ from Backend.routers.project_router import router as project_router
 from Backend.routers.report_router import router as report_router
 from Backend.routers.repository_router import router as repository_router
 from Backend.routers.threshold_router import router as threshold_router
+from Backend.routers.webhook_router import router as webhook_router
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +178,7 @@ app.include_router(metric_router)
 app.include_router(report_router)
 app.include_router(lifecycle_router)
 app.include_router(admin_router)
+app.include_router(webhook_router)
 
 
 # ---------------------------------------------------------------------------
