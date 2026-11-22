@@ -701,7 +701,7 @@ export const repositoryApi = {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('aegis_token');
       const response = await fetch(
         `${API_BASE_URL}/repositories/branches?url=${encodeURIComponent(cleanUrl)}`,
         {

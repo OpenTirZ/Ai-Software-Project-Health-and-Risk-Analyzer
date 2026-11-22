@@ -1,33 +1,49 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim
+# -----------------------------------------------------------------------------
+# Stage 1: Build & Dependency Resolution
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim AS builder
 
-# Prevent Python from writing pyc files to disc and buffering stdout/stderr
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --user -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# Stage 2: Minimal Production Runtime
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim AS runner
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    PATH=/root/.local/bin:$PATH
 
 WORKDIR /app
 
-# Install system dependencies (curl for container healthcheck)
+# Install lightweight runtime dependencies (curl for container healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy installed Python packages from builder stage
+COPY --from=builder /root/.local /root/.local
 
-# Copy project files into container
+# Copy application sources
 COPY conftest.py ./
 COPY Backend/ ./Backend/
 
-# Expose backend port
+# Expose backend service port
 EXPOSE 8000
 
 # Container healthcheck using FastAPI health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
-# Start the FastAPI application with Uvicorn
+# Start FastAPI application with Uvicorn ASGI server
 CMD ["uvicorn", "Backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
