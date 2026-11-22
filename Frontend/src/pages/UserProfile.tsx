@@ -52,7 +52,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [profile, setProfile] = useState<UserProfileData>(() => ({
     fullName: currentUser?.fullName || 'John Developer',
     username: currentUser?.username || '@johndev',
-    email: currentUser?.email || 'john.dev@aegis-health.io',
+    email: currentUser?.email || 'john.dev@kavach.ai',
     role: currentUser?.role || 'Lead Staff Architect',
     team: currentUser?.team || 'Enterprise Core Platform',
     bio:
@@ -412,7 +412,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
           <div className="flex flex-col justify-between gap-4 border-t border-[#9ED4C8] pt-5 sm:flex-row sm:items-center">
             <span className="text-xs text-slate-500">
-              Session authenticated via Aegis AI Security Layer
+              Session authenticated via कVaच Security Layer
             </span>
 
             <button
@@ -522,11 +522,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </span>
               )}
             </div>
-
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              Choose which events Aegis AI should remember as your alert
-              preferences. Delivery channels (email, Slack) are configured
-              separately and must be enabled in your organization settings.
+              Choose which events कVaच should remember as your alert preferences. Delivery channels (email, Slack) are configured separately and must be enabled in your organization settings.
             </p>
           </div>
 

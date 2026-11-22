@@ -43,7 +43,7 @@ export function App() {
     return {
       fullName: 'Developer',
       username: '@developer',
-      email: 'dev@aegis-health.io',
+      email: 'dev@kavach.ai',
       role: 'developer',
       team: 'Core Platform Engineering',
       bio: 'Leading backend architecture, metrics analysis, and AI telemetry guardrails.',
