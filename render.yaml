@@ -25,9 +25,9 @@ services:
         value: "http://localhost:5173,https://kavach-frontend.onrender.com"
       - key: GITHUB_TOKEN
         sync: false
-      - key: GEMINI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
-      - key: OPENROUTER_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
 
   # ---------------------------------------------------------------------------

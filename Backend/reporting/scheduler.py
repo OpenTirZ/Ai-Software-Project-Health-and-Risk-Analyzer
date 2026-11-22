@@ -563,7 +563,7 @@ def run_worker_daemon(poll_interval_seconds: int = 60) -> None:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    logger.info("Starting Aegis AI Background Report Worker Daemon...")
+    logger.info("Starting कVaच (Kavach) Background Report Worker Daemon...")
 
     scheduler = ReportScheduler(poll_interval_seconds=poll_interval_seconds)
     running = True
@@ -592,7 +592,7 @@ def run_worker_daemon(poll_interval_seconds: int = 60) -> None:
         except Exception as exc:
             logger.exception("Worker loop error: %s", exc)
 
-    logger.info("Aegis AI Report Worker Daemon stopped cleanly.")
+    logger.info("कVaच (Kavach) Report Worker Daemon stopped cleanly.")
 
 
 if __name__ == "__main__":
