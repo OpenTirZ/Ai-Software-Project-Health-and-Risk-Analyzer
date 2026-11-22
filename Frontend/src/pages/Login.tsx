@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PageView } from '../types';
 import { Mail, Lock, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../services/api';
@@ -12,12 +12,12 @@ interface LoginProps {
 
 export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initialEmail, successMessage }) => {
   const [email, setEmail] = useState(initialEmail || '');
-  const [prevInitialEmail, setPrevInitialEmail] = useState(initialEmail);
 
-  if (initialEmail !== prevInitialEmail) {
-    setPrevInitialEmail(initialEmail);
-    setEmail(initialEmail || '');
-  }
+  useEffect(() => {
+    if (initialEmail !== undefined) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -135,7 +135,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Email Field */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="login-email" className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
                 Email address
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -145,6 +145,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
                   <Mail className={`w-5 h-5 ${errors.email ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="login-email"
                   type="email"
                   disabled={isLoading}
                   value={email}
@@ -166,7 +167,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
 
             {/* Password Field */}
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
+              <label htmlFor="login-password" className="block text-sm font-medium text-slate-900 mb-1.5 font-['Playpen_Sans',cursive,sans-serif]">
                 Password
               </label>
               <div className={`relative rounded-[12px] border shadow-sm transition-all overflow-hidden flex items-center ${
@@ -176,6 +177,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
                   <Lock className={`w-5 h-5 ${errors.password ? 'text-rose-500' : 'text-indigo-500'}`} />
                 </div>
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   disabled={isLoading}
                   value={password}
@@ -191,6 +193,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
                   onClick={() => setShowPassword(!showPassword)}
                   className="pr-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none cursor-pointer"
                   title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5 text-slate-500" />

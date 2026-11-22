@@ -135,7 +135,7 @@ export const CreateProject: React.FC<CreateProjectProps> = ({ onProjectCreated, 
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           {/* Project Name Field */}
           <div>
-            <label className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
+            <label htmlFor="project-name" className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-500" />
               <span>Project Name <span className="text-rose-500">*</span></span>
             </label>
@@ -143,6 +143,7 @@ export const CreateProject: React.FC<CreateProjectProps> = ({ onProjectCreated, 
               errors.name ? 'border-rose-400 focus-within:ring-2 focus-within:ring-rose-100' : 'border-slate-300 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100'
             }`}>
               <input
+                id="project-name"
                 type="text"
                 disabled={isLoading}
                 value={name}
@@ -197,12 +198,13 @@ export const CreateProject: React.FC<CreateProjectProps> = ({ onProjectCreated, 
 
           {/* Project Description */}
           <div>
-            <label className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
+            <label htmlFor="project-description" className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
               <FileText className="w-4 h-4 text-indigo-500" />
               <span>Project Description <span className="text-xs font-normal text-slate-400">(Optional)</span></span>
             </label>
             <div className="rounded-xl border border-slate-300 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden bg-slate-50/50">
               <textarea
+                id="project-description"
                 rows={3}
                 disabled={isLoading}
                 value={description}
