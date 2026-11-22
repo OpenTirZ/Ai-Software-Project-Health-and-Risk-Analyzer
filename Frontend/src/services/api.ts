@@ -62,7 +62,7 @@ export interface ApiError {
 // ---------------------------------------------------------------------------
 // URL & Environment Resolution
 // ---------------------------------------------------------------------------
-const RAW_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const RAW_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 const CLEAN_URL = RAW_URL.replace(/\/+$/, '');
 // API_BASE_URL points to the /api base (e.g. http://localhost:5000/api)
 export const API_BASE_URL = CLEAN_URL.endsWith('/api') ? CLEAN_URL : `${CLEAN_URL}/api`;
