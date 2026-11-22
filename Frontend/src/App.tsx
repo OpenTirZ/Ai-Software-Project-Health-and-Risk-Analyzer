@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { PageView, Repository, UserProfileData } from './types';
-import { projectApi, authApi, dataSyncApi, type ProjectResponse } from './services/api';
+import { projectApi, authApi, dataSyncApi, type ProjectResponse, type User } from './services/api';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { SignUp } from './pages/SignUp';
@@ -36,7 +36,8 @@ export function App() {
     const saved = localStorage.getItem('aegis_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        // Restore display preferences while the server verifies the session role.
+        return { ...JSON.parse(saved), role: 'developer' };
       } catch {
         // fallback
       }
@@ -80,6 +81,7 @@ export function App() {
       authApi
         .getMe()
         .then((user) => {
+          if (localStorage.getItem('aegis_token') !== token) return;
           if (user) {
             setIsAuthenticated(true);
             const cleanUsername = user.username?.startsWith('@') ? user.username : `@${user.username || user.email.split('@')[0]}`;
@@ -103,6 +105,7 @@ export function App() {
           }
         })
         .catch(() => {
+          if (localStorage.getItem('aegis_token') !== token) return;
           // Network error or 401 on token check: reset session safely
           localStorage.removeItem('aegis_token');
           localStorage.removeItem('aegis_auth');
@@ -122,7 +125,7 @@ export function App() {
     }
   };
 
-  const handleLoginSuccess = async (user: { email: string; name: string; username?: string }) => {
+  const handleLoginSuccess = async (user: User) => {
     setLoginSuccessMessage(null);
     setIsAuthenticated(true);
     localStorage.setItem('aegis_auth', 'true');
@@ -134,6 +137,7 @@ export function App() {
       fullName: user.name || 'Developer',
       username: cleanUsername,
       email: user.email,
+      role: user.role || 'developer',
     };
     setCurrentUser(updated);
     localStorage.setItem('aegis_user', JSON.stringify(updated));

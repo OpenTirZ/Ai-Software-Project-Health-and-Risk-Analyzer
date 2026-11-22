@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle2,
+  X,
 } from 'lucide-react';
 import { adminApi, type AdminUser, type AuditLog } from '../services/api';
 
@@ -74,6 +75,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ active }) =>
 
 export const AdminPanel: React.FC = () => {
   const [tab, setTab] = useState<'users' | 'audit'>('users');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // ── User Directory state ──────────────────────────────────────────────────
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -82,7 +84,6 @@ export const AdminPanel: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [userError, setUserError] = useState<string | null>(null);
 
   // Per-row action state: { [userId]: 'role' | 'status' | null }
   const [pendingAction, setPendingAction] = useState<Record<string, string | null>>({});
@@ -91,7 +92,6 @@ export const AdminPanel: React.FC = () => {
   // ── Audit Log state ───────────────────────────────────────────────────────
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
-  const [auditError, setAuditError] = useState<string | null>(null);
 
   // ── Debounce search ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -102,7 +102,7 @@ export const AdminPanel: React.FC = () => {
   // ── Load users ────────────────────────────────────────────────────────────
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true);
-    setUserError(null);
+    setErrorMessage(null);
     try {
       const res = await adminApi.getUsers({
         search: debouncedSearch || undefined,
@@ -111,8 +111,8 @@ export const AdminPanel: React.FC = () => {
       });
       setUsers(res.items);
       setTotal(res.total);
-    } catch (err: any) {
-      setUserError(err.message || 'Failed to load users.');
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to load users.');
     } finally {
       setLoadingUsers(false);
     }
@@ -123,12 +123,12 @@ export const AdminPanel: React.FC = () => {
   // ── Load audit logs ───────────────────────────────────────────────────────
   const loadAudit = useCallback(async () => {
     setLoadingAudit(true);
-    setAuditError(null);
+    setErrorMessage(null);
     try {
       const logs = await adminApi.getAuditLogs(200);
       setAuditLogs(logs);
-    } catch (err: any) {
-      setAuditError(err.message || 'Failed to load audit logs.');
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to load audit logs.');
     } finally {
       setLoadingAudit(false);
     }
@@ -139,6 +139,7 @@ export const AdminPanel: React.FC = () => {
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleRoleChange = async (user: AdminUser, newRole: AdminUser['role']) => {
     if (newRole === user.role) return;
+    setErrorMessage(null);
     setPendingAction((p) => ({ ...p, [user.id]: 'role' }));
     setActionFeedback((f) => ({ ...f, [user.id]: null }));
     try {
@@ -146,14 +147,15 @@ export const AdminPanel: React.FC = () => {
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setActionFeedback((f) => ({ ...f, [user.id]: '✓ Role updated' }));
       setTimeout(() => setActionFeedback((f) => ({ ...f, [user.id]: null })), 2500);
-    } catch (err: any) {
-      setActionFeedback((f) => ({ ...f, [user.id]: err.message || 'Error updating role' }));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error updating role');
     } finally {
       setPendingAction((p) => ({ ...p, [user.id]: null }));
     }
   };
 
   const handleToggleStatus = async (user: AdminUser) => {
+    setErrorMessage(null);
     setPendingAction((p) => ({ ...p, [user.id]: 'status' }));
     setActionFeedback((f) => ({ ...f, [user.id]: null }));
     try {
@@ -164,8 +166,8 @@ export const AdminPanel: React.FC = () => {
         [user.id]: updated.is_active ? '✓ Activated' : '✓ Deactivated',
       }));
       setTimeout(() => setActionFeedback((f) => ({ ...f, [user.id]: null })), 2500);
-    } catch (err: any) {
-      setActionFeedback((f) => ({ ...f, [user.id]: err.message || 'Error toggling status' }));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error toggling status');
     } finally {
       setPendingAction((p) => ({ ...p, [user.id]: null }));
     }
@@ -174,6 +176,15 @@ export const AdminPanel: React.FC = () => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
+      {errorMessage && (
+        <div role="alert" className="fixed bottom-5 right-5 z-50 flex max-w-sm items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-lg">
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {errorMessage}
+          <button type="button" aria-label="Dismiss error" onClick={() => setErrorMessage(null)}>
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {/* ── Page Header ── */}
       <div className="bg-[#0f172a] rounded-2xl p-6 md:p-8 border border-slate-800 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -264,14 +275,6 @@ export const AdminPanel: React.FC = () => {
             {loadingUsers ? 'Loading…' : `${total} user${total !== 1 ? 's' : ''} found`}
           </div>
 
-          {/* Error */}
-          {userError && (
-            <div className="m-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {userError}
-            </div>
-          )}
-
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -361,14 +364,8 @@ export const AdminPanel: React.FC = () => {
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {feedback && (
-                              <span
-                                className={`text-[11px] font-semibold flex items-center gap-1 ${
-                                  feedback.startsWith('✓') ? 'text-emerald-600' : 'text-rose-600'
-                                }`}
-                              >
-                                {feedback.startsWith('✓') && (
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                )}
+                              <span className="text-[11px] font-semibold flex items-center gap-1 text-emerald-600">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
                                 {feedback}
                               </span>
                             )}
@@ -425,14 +422,6 @@ export const AdminPanel: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${loadingAudit ? 'animate-spin' : ''}`} />
             </button>
           </div>
-
-          {/* Error */}
-          {auditError && (
-            <div className="m-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {auditError}
-            </div>
-          )}
 
           {/* Log entries */}
           {loadingAudit ? (

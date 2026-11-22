@@ -298,8 +298,6 @@ export const authApi = {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.status === 401 || response.status === 403) {
-        localStorage.removeItem('aegis_token');
-        localStorage.removeItem('aegis_auth');
         return null;
       }
       if (response.ok) {
@@ -326,6 +324,7 @@ export const authApi = {
    */
   async logout(): Promise<void> {
     const token = localStorage.getItem('aegis_token');
+    localStorage.removeItem('aegis_token');
     if (token && !FORCE_MOCK) {
       try {
         await fetch(`${API_BASE_URL}/auth/logout`, {
@@ -336,7 +335,6 @@ export const authApi = {
         // ignore
       }
     }
-    localStorage.removeItem('aegis_token');
   },
 
   // Internal Mock Implementation (Only invoked if VITE_USE_MOCK=true)

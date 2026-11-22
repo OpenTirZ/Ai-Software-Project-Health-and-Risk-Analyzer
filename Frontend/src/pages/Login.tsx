@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import type { PageView } from '../types';
 import { Mail, Lock, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
-import { authApi } from '../services/api';
+import { authApi, type User } from '../services/api';
 
 interface LoginProps {
   onNavigate: (view: PageView) => void;
-  onLoginSuccess: (user: { email: string; name: string; username?: string }) => void;
+  onLoginSuccess: (user: User) => void;
   initialEmail?: string;
   successMessage?: string;
 }

@@ -191,13 +191,13 @@ def update_user_role(
         )
 
     # Block self-demotion.
-    if user_id == actor_id:
+    target = _fetch_target_user(user_id)
+    if str(target["_id"]) == actor_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admins cannot change their own role.",
         )
 
-    target = _fetch_target_user(user_id)
     old_role = target.get("role", "developer")
 
     try:
@@ -237,13 +237,12 @@ def activate_user(
     """
     actor_id = _get_actor_id(current_user)
 
-    if user_id == actor_id:
+    target = _fetch_target_user(user_id)
+    if str(target["_id"]) == actor_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admins cannot modify their own account activation status.",
         )
-
-    _fetch_target_user(user_id)  # 404 guard
 
     try:
         update_user(user_id, {"is_active": True, "updatedAt": datetime.now(timezone.utc)})
@@ -283,13 +282,12 @@ def deactivate_user(
     """
     actor_id = _get_actor_id(current_user)
 
-    if user_id == actor_id:
+    target = _fetch_target_user(user_id)
+    if str(target["_id"]) == actor_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admins cannot deactivate their own account.",
         )
-
-    _fetch_target_user(user_id)  # 404 guard
 
     try:
         update_user(user_id, {"is_active": False, "updatedAt": datetime.now(timezone.utc)})

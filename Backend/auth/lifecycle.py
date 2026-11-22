@@ -63,6 +63,12 @@ def deactivate_user(
             detail="User not found.",
         )
 
+    if str(user["_id"]) == str(admin_user["_id"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admins cannot deactivate their own account.",
+        )
+
     now = datetime.now(timezone.utc)
     try:
         update_user(id, {"is_active": False, "updatedAt": now})
