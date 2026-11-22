@@ -38,7 +38,6 @@ export function App() {
       try {
         return JSON.parse(saved);
       } catch {
-        // fallback
       }
     }
     return {
@@ -51,7 +50,6 @@ export function App() {
     };
   });
 
-  // Load projects from backend
   const loadProjects = useCallback(async () => {
     if (!localStorage.getItem('aegis_token')) return;
     setLoadingProjects(true);
@@ -73,7 +71,6 @@ export function App() {
     }
   }, []);
 
-  // Fetch current user and project list on mount if token exists
   useEffect(() => {
     const token = localStorage.getItem('aegis_token');
     if (token) {
@@ -94,7 +91,6 @@ export function App() {
             localStorage.setItem('aegis_user', JSON.stringify(updated));
             loadProjects();
           } else {
-            // Token expired or invalid: clear session to avoid dead-locked state
             localStorage.removeItem('aegis_token');
             localStorage.removeItem('aegis_auth');
             localStorage.removeItem('aegis_user');
@@ -103,7 +99,6 @@ export function App() {
           }
         })
         .catch(() => {
-          // Network error or 401 on token check: reset session safely
           localStorage.removeItem('aegis_token');
           localStorage.removeItem('aegis_auth');
           localStorage.removeItem('aegis_user');
@@ -138,7 +133,6 @@ export function App() {
     setCurrentUser(updated);
     localStorage.setItem('aegis_user', JSON.stringify(updated));
 
-    // Fetch user's real projects
     await loadProjects();
     setCurrentView('projects');
   };
@@ -157,13 +151,11 @@ export function App() {
   const handleProjectCreated = (newProject: ProjectResponse) => {
     setProjects([newProject, ...projects]);
     setActiveProject(newProject);
-    // Proceed to Step 2: Connect GitHub Repository
     setCurrentView('connect-repo');
   };
 
   const handleRepoConnected = async (_repo: Repository) => {
     await loadProjects();
-    // Redirect to project overview after repository connection
     setCurrentView('overview');
   };
 
@@ -198,7 +190,6 @@ export function App() {
     setCurrentView('login');
   };
 
-  // Guard: redirect non-admins away from the admin view
   const handleNavigate = (view: PageView) => {
     if (view === 'admin' && currentUser?.role !== 'admin') {
       alert('Access denied. Admin privileges required.');
@@ -208,7 +199,6 @@ export function App() {
     setCurrentView(view);
   };
 
-  // Full-screen auth views: Entry point is always Login / SignUp until authenticated
   if (!isAuthenticated || currentView === 'login' || currentView === 'signup') {
     if (currentView === 'signup') {
       return (
@@ -234,7 +224,6 @@ export function App() {
     );
   }
 
-  // Dashboard views wrapped in shared Layout (Sidebar & TopBar)
   return (
     <Layout
       currentView={currentView}
@@ -247,6 +236,8 @@ export function App() {
       onSyncAll={handleSyncAllActive}
       isSyncing={isGlobalSyncing}
     >
+
+      <div key={currentView} className="page-enter">
       {currentView === 'projects' && (
         <Projects
           projects={projects}
@@ -326,10 +317,10 @@ export function App() {
         />
       )}
 
-      {/* Admin Panel — only rendered when user is admin (guard already enforced by handleNavigate) */}
       {currentView === 'admin' && currentUser?.role === 'admin' && (
         <AdminPanel />
       )}
+      </div>
     </Layout>
   );
 }
