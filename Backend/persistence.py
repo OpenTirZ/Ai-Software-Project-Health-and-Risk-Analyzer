@@ -1,4 +1,5 @@
 import logging
+import re
 from bson import ObjectId
 from datetime import datetime, timezone
 from pymongo import UpdateOne
@@ -8,6 +9,7 @@ from pymongo.errors import (
     PyMongoError,
     ServerSelectionTimeoutError,
 )
+from Backend.auth.normalization import normalize_email
 from Backend.database import (
     users_collection,
     projects_collection,
@@ -158,10 +160,14 @@ def get_user(user_id):
 def get_user_by_email(email):
     if not email:
         return None
+    normalized_email = normalize_email(email)
+    if not normalized_email:
+        return None
     try:
-        # Case-insensitive regex query for email search
+        # Case-insensitive regex query for email search with literal regex escaping
+        escaped_email = re.escape(normalized_email)
         document = users_collection.find_one(
-            {"email": {"$regex": f"^{email.strip()}$", "$options": "i"}}
+            {"email": {"$regex": f"^\\s*{escaped_email}\\s*$", "$options": "i"}}
         )
         return serialize_document(document)
     except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
