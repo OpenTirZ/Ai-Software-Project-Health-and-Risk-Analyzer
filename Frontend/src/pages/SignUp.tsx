@@ -136,17 +136,23 @@ export const SignUp: React.FC<SignUpProps> = ({
     <main className="flex min-h-screen w-full flex-col app-canvas md:flex-row">
 
       <section className="hero-vibrant flex w-full flex-col justify-between p-6 text-white sm:p-10 md:min-h-screen md:w-[43%] md:p-12 lg:p-16">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/20 bg-white/10">
-            <ShieldCheck className="h-6 w-6 text-white" />
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1.5 shadow-md">
+            <img 
+              src="/assets/kavach-logo.png" 
+              alt="कVaच Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight sm:text-base">
-              AI Software Project
+            <div className="text-2xl sm:text-3xl font-black text-white leading-none tracking-tight flex items-center gap-0.5 mb-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              <span>क</span><span className="text-[#FF8A95]">Va</span><span>च</span>
+            </div>
+            <p className="text-xs sm:text-sm font-medium text-[#9ED4C8] leading-tight">
+              See the Risks. Strengthen the Project.
             </p>
-            <p className="text-sm font-bold leading-tight sm:text-base">
-              Health & Risk Analyzer
-            </p>
+          </div>
+        </div>
           </div>
         </div>
 

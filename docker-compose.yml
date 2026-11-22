@@ -60,7 +60,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: project-health-backend:latest
-    container_name: ai_health_report_worker
+    container_name: kavach_report_worker
     restart: unless-stopped
     command: ["python", "-m", "Backend.reporting.scheduler"]
     env_file:
