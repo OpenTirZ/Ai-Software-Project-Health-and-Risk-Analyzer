@@ -363,7 +363,7 @@ def sync_issues(
     project_id: str,
     request: Optional[SyncIssuesRequest] = None,
     current_user: dict = Depends(
-        require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
+        require_role(Role.ADMIN, Role.PROJECT_MANAGER)
     ),
 ):
     """

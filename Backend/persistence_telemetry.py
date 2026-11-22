@@ -98,6 +98,9 @@ def upsert_pull_request(
         if result.upserted_id:
             return str(result.upserted_id)
 
+        if existing_doc and "_id" in existing_doc:
+            return str(existing_doc["_id"])
+
         doc = pull_requests_collection.find_one(filter_query)
         return str(doc["_id"]) if doc else ""
     except PyMongoError as exc:
@@ -196,6 +199,9 @@ def upsert_issue(
         if result.upserted_id:
             return str(result.upserted_id)
 
+        if existing_doc and "_id" in existing_doc:
+            return str(existing_doc["_id"])
+
         doc = issues_collection.find_one(filter_query)
         return str(doc["_id"]) if doc else ""
     except PyMongoError as exc:
@@ -291,6 +297,9 @@ def upsert_milestone(
         _reconcile_write(milestones_collection, filter_query, existing_doc, result.upserted_id, project_id)
         if result.upserted_id:
             return str(result.upserted_id)
+
+        if existing_doc and "_id" in existing_doc:
+            return str(existing_doc["_id"])
 
         doc = milestones_collection.find_one(filter_query)
         return str(doc["_id"]) if doc else ""
