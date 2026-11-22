@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import type { PageView, UserProfileData } from '../types';
@@ -29,14 +29,31 @@ export const Layout: React.FC<LayoutProps> = ({
   isSyncing = false,
   children,
 }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleNavigate = (view: PageView) => {
+    setIsMenuOpen(false);
+    onNavigate(view);
+  };
+
   return (
     <div className="flex h-screen min-h-screen w-full overflow-hidden app-canvas text-[var(--color-text-primary)] font-sans">
+
+      {isMenuOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setIsMenuOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+        />
+      )}
 
       <Sidebar
         currentView={currentView}
         currentUser={currentUser}
-        onNavigate={onNavigate}
+        onNavigate={handleNavigate}
         onLogout={onLogout}
+        isOpen={isMenuOpen}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -47,9 +64,10 @@ export const Layout: React.FC<LayoutProps> = ({
           activeProject={activeProject}
           currentUser={currentUser}
           onSelectProject={onSelectProject}
-          onNavigate={onNavigate}
+          onNavigate={handleNavigate}
           onSyncAll={onSyncAll}
           isSyncing={isSyncing}
+          onOpenMenu={() => setIsMenuOpen(true)}
         />
 
         <main
