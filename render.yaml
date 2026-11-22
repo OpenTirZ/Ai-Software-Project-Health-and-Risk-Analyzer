@@ -24,7 +24,7 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
       - key: CORS_ALLOWED_ORIGINS
-        value: "http://localhost:5173,https://kavach-frontend.onrender.com"
+        value: "http://localhost:5173,https://kavach.onrender.com"
       - key: GITHUB_TOKEN
         sync: false
       - key: GROQ_API_KEY
