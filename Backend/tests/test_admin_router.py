@@ -1,235 +1,95 @@
-"""
-Tests for the RBAC Administration Endpoints (/api/admin/*).
+"""HTTP regression tests for admin permissions, account lifecycle and project access."""
+from datetime import datetime, timedelta, timezone
 
-Covers:
-  - Non-admin callers receive 403 on all /api/admin/* routes.
-  - GET /api/admin/users  – listing, search, pagination, is_active filter.
-  - PATCH /api/admin/users/{id}/role – valid change, self-demotion block, invalid role.
-  - POST /api/admin/users/{id}/activate | /deactivate – toggling, self-block, 404.
-  - GET /api/admin/audit-logs – returns log entries.
-  - Deactivated user receives 401 on subsequent auth requests.
-  - JWT access token contains the `role` claim after signup and login.
-
-Run with:
-    PYTHONPATH=. pytest Backend/tests/test_admin_router.py -v
-"""
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
+import mongomock
 import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
 
-from Backend.auth.dependencies import get_current_user
+from Backend import persistence
 from Backend.auth.security import create_access_token, decode_access_token
 from Backend.main import app
-from Backend.persistence import clear_users, create_user, get_user, update_user
 
 client = TestClient(app)
 
-# ---------------------------------------------------------------------------
-# Shared in-memory mock store (mirrors test_auth.py pattern)
-# ---------------------------------------------------------------------------
-
-_IN_MEMORY_USERS: dict = {}
-_IN_MEMORY_AUDIT: list = []
-
-
-class MockInsertResult:
-    def __init__(self, inserted_id):
-        self.inserted_id = inserted_id
-
-
-class MockUpdateResult:
-    def __init__(self):
-        self.modified_count = 1
-        self.upserted_id = None
-
-
-class MockUsersCollection:
-    def insert_one(self, doc):
-        doc_copy = dict(doc)
-        doc_id = doc_copy.get("_id", ObjectId())
-        doc_copy["_id"] = doc_id
-        _IN_MEMORY_USERS[str(doc_id)] = doc_copy
-        return MockInsertResult(doc_id)
-
-    def find_one(self, query):
-        if "_id" in query:
-            target_id = str(query["_id"])
-            return _IN_MEMORY_USERS.get(target_id)
-        if "email" in query:
-            email_q = query["email"]
-            if isinstance(email_q, dict) and "$regex" in email_q:
-                target = email_q["$regex"].replace("^", "").replace("$", "").lower()
-            else:
-                target = str(email_q).lower()
-            for doc in _IN_MEMORY_USERS.values():
-                if doc.get("email", "").lower() == target:
-                    return doc
-        return None
-
-    def find(self, query=None):
-        query = query or {}
-        results = []
-        for doc in _IN_MEMORY_USERS.values():
-            match = True
-            if "$or" in query:
-                match = False
-                import re
-                for cond in query["$or"]:
-                    for field, pattern_spec in cond.items():
-                        if isinstance(pattern_spec, dict) and "$regex" in pattern_spec:
-                            pat = re.compile(
-                                pattern_spec["$regex"],
-                                re.IGNORECASE if "$options" in pattern_spec else 0,
-                            )
-                            if pat.search(str(doc.get(field, ""))):
-                                match = True
-                                break
-                    if match:
-                        break
-            if "is_active" in query:
-                val = query["is_active"]
-                # treat missing is_active as True (default)
-                doc_active = doc.get("is_active", True)
-                if doc_active != val:
-                    match = False
-            if match:
-                results.append(doc)
-        return _MockCursor(results)
-
-    def update_one(self, filter_q, update_doc, upsert=False):
-        target_id = str(filter_q.get("_id", ""))
-        doc = _IN_MEMORY_USERS.get(target_id)
-        if doc and "$set" in update_doc:
-            for k, v in update_doc["$set"].items():
-                doc[k] = v
-        return MockUpdateResult()
-
-    def delete_many(self, query):
-        _IN_MEMORY_USERS.clear()
-
-    def count_documents(self, query=None):
-        # Use find to apply same filter logic
-        return len(list(self.find(query or {})))
-
-
-class _MockCursor:
-    def __init__(self, docs):
-        self._docs = docs
-        self._skip = 0
-        self._limit = None
-
-    def sort(self, *_):
-        return self
-
-    def skip(self, n):
-        self._skip = n
-        return self
-
-    def limit(self, n):
-        self._limit = n
-        return self
-
-    def __iter__(self):
-        docs = self._docs[self._skip:]
-        if self._limit is not None:
-            docs = docs[: self._limit]
-        return iter(docs)
-
-
-class MockAuditCollection:
-    def insert_one(self, doc):
-        doc_copy = dict(doc)
-        doc_copy["_id"] = ObjectId()
-        _IN_MEMORY_AUDIT.append(doc_copy)
-        return MockInsertResult(doc_copy["_id"])
-
-    def find(self, *_, **__):
-        return _MockCursor(list(reversed(_IN_MEMORY_AUDIT)))
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
 def reset_db(monkeypatch):
-    _IN_MEMORY_USERS.clear()
-    _IN_MEMORY_AUDIT.clear()
-    monkeypatch.setattr("Backend.persistence.users_collection", MockUsersCollection())
-    monkeypatch.setattr("Backend.persistence.audit_logs_collection", MockAuditCollection())
-    yield
-    app.dependency_overrides.clear()
+    db = mongomock.MongoClient().rbac_tests
+    monkeypatch.setattr(persistence, "users_collection", db.users)
+    monkeypatch.setattr(persistence, "projects_collection", db.projects)
+    monkeypatch.setattr(persistence, "audit_logs_collection", db.audit_logs)
+    monkeypatch.setattr(app, "dependency_overrides", {})
 
 
-def _make_user(role: str = "developer", is_active: bool = True) -> tuple[str, str]:
-    """Insert a user and return (user_id, bearer_token)."""
-    from bson import ObjectId
-    oid = ObjectId()
-    doc = {
-        "_id": oid,
-        "name": f"User {role}",
-        "email": f"{role}-{str(oid)[-4:]}@test.com",
-        "password_hash": "x",
+def _make_user(
+    role: str = "developer", is_active: bool = True, name: str | None = None,
+) -> tuple[str, str]:
+    """Persist an account and issue a token for its initial role."""
+    uid = persistence.create_user({
+        "name": name or f"User {role}",
+        "email": f"{ObjectId()}@example.com",
+        "password_hash": "unused",
         "role": role,
         "is_active": is_active,
         "createdAt": datetime.now(timezone.utc).isoformat(),
-    }
-    _IN_MEMORY_USERS[str(oid)] = doc
-    token = create_access_token({"sub": str(oid), "role": role})
-    return str(oid), token
+    })
+    return uid, create_access_token({"sub": uid, "role": role})
 
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-# ===========================================================================
-# 1. Access control — non-admin receives 403
-# ===========================================================================
+# Give the mutating endpoints a real target in the opposite activation state.
+ADMIN_ACTIONS = [
+    pytest.param("GET", "/api/admin/users", None, id="list-users"),
+    pytest.param("GET", "/api/admin/audit-logs", None, id="audit-logs"),
+    pytest.param("PATCH", "/api/admin/users/{uid}/role", {"role": "admin"}, id="assign-role"),
+    pytest.param("POST", "/api/admin/users/{uid}/activate", None, id="activate"),
+    pytest.param("POST", "/api/admin/users/{uid}/deactivate", None, id="deactivate"),
+]
+
 
 class TestAdminAccessControl:
-    def test_developer_cannot_list_users(self):
-        _, tok = _make_user("developer")
-        r = client.get("/api/admin/users", headers=_auth(tok))
-        assert r.status_code == 403
+    @pytest.mark.parametrize("method,path,payload", ADMIN_ACTIONS)
+    @pytest.mark.parametrize("headers", [
+        pytest.param({}, id="missing"),
+        pytest.param({"Authorization": "Basic invalid"}, id="wrong-scheme"),
+        pytest.param(_auth("invalid-token"), id="malformed-bearer"),
+    ])
+    def test_admin_actions_require_valid_bearer(self, method, path, payload, headers):
+        uid, _ = _make_user(is_active=not path.endswith("/activate"))
+        before = persistence.get_user(uid)
+        response = client.request(method, path.format(uid=uid), headers=headers, json=payload)
+        assert response.status_code == 401
+        assert response.headers["WWW-Authenticate"] == "Bearer"
+        assert persistence.get_user(uid) == before
 
-    def test_project_manager_cannot_list_users(self):
-        _, tok = _make_user("project_manager")
-        r = client.get("/api/admin/users", headers=_auth(tok))
-        assert r.status_code == 403
+    def test_expired_admin_token_is_rejected(self):
+        admin_id, _ = _make_user("admin")
+        expired = create_access_token({"sub": admin_id, "role": "admin"}, timedelta(minutes=-1))
+        response = client.get("/api/admin/users", headers=_auth(expired))
+        assert response.status_code == 401
 
-    def test_unauthenticated_cannot_access_admin(self):
-        r = client.get("/api/admin/users")
-        assert r.status_code in (401, 403)
+    @pytest.mark.parametrize("role", ["developer", "project_manager"])
+    @pytest.mark.parametrize("method,path,payload", ADMIN_ACTIONS)
+    def test_non_admin_actions_are_forbidden(self, role, method, path, payload):
+        _, token = _make_user(role)
+        uid, _ = _make_user(is_active=not path.endswith("/activate"))
+        before = persistence.get_user(uid)
+        response = client.request(method, path.format(uid=uid), headers=_auth(token), json=payload)
+        assert response.status_code == 403
+        assert persistence.get_user(uid) == before
 
-    def test_developer_cannot_change_role(self):
-        uid, _ = _make_user("developer")
-        _, dev_tok = _make_user("developer")
-        r = client.patch(
-            f"/api/admin/users/{uid}/role",
-            json={"role": "admin"},
-            headers=_auth(dev_tok),
-        )
-        assert r.status_code == 403
-
-    def test_developer_cannot_deactivate(self):
-        uid, _ = _make_user("developer")
-        _, dev_tok = _make_user("developer")
-        r = client.post(f"/api/admin/users/{uid}/deactivate", headers=_auth(dev_tok))
-        assert r.status_code == 403
-
-    def test_developer_cannot_view_audit_logs(self):
-        _, tok = _make_user("developer")
-        r = client.get("/api/admin/audit-logs", headers=_auth(tok))
-        assert r.status_code == 403
-
-    def test_admin_can_access_users_endpoint(self):
-        _, tok = _make_user("admin")
-        r = client.get("/api/admin/users", headers=_auth(tok))
-        assert r.status_code == 200
+    @pytest.mark.parametrize("role", ["developer", "project_manager"])
+    def test_non_admin_cannot_promote_self(self, role):
+        uid, token = _make_user(role)
+        headers = _auth(token)
+        response = client.patch(f"/api/admin/users/{uid}/role", json={"role": "admin"}, headers=headers)
+        assert response.status_code == 403
+        assert persistence.get_user(uid)["role"] == role
+        assert client.get("/api/admin/users", headers=headers).status_code == 403
 
 
 # ===========================================================================
@@ -244,8 +104,8 @@ class TestListUsers:
         r = client.get("/api/admin/users", headers=_auth(tok))
         assert r.status_code == 200
         body = r.json()
-        assert body["total"] >= 3
-        assert len(body["items"]) >= 3
+        assert body["total"] == 3
+        assert {u["role"] for u in body["items"]} == {"admin", "developer", "project_manager"}
 
     def test_pagination_skip_and_limit(self):
         _, tok = _make_user("admin")
@@ -253,21 +113,11 @@ class TestListUsers:
             _make_user("developer")
         r = client.get("/api/admin/users?skip=0&limit=2", headers=_auth(tok))
         assert r.status_code == 200
-        assert len(r.json()["items"]) <= 2
+        assert len(r.json()["items"]) == 2
 
     def test_search_by_name(self):
         _, tok = _make_user("admin")
-        # Insert a user with a distinctive name via direct insertion
-        from bson import ObjectId
-        oid = ObjectId()
-        _IN_MEMORY_USERS[str(oid)] = {
-            "_id": oid,
-            "name": "UniqueXYZUser",
-            "email": "xyz@test.com",
-            "role": "developer",
-            "is_active": True,
-            "createdAt": "",
-        }
+        _make_user(name="UniqueXYZUser")
         r = client.get("/api/admin/users?search=UniqueXYZ", headers=_auth(tok))
         assert r.status_code == 200
         body = r.json()
@@ -275,11 +125,12 @@ class TestListUsers:
 
     def test_filter_active_false(self):
         _, tok = _make_user("admin")
-        _make_user("developer", is_active=False)
+        inactive_id, _ = _make_user("developer", is_active=False)
         r = client.get("/api/admin/users?is_active=false", headers=_auth(tok))
         assert r.status_code == 200
         body = r.json()
-        assert all(not u["is_active"] for u in body["items"])
+        assert [u["id"] for u in body["items"]] == [inactive_id]
+        assert body["items"][0]["is_active"] is False
 
     def test_response_schema_fields(self):
         _, tok = _make_user("admin")
@@ -299,7 +150,7 @@ class TestListUsers:
 
 class TestUpdateUserRole:
     def test_admin_can_promote_developer_to_project_manager(self):
-        admin_id, tok = _make_user("admin")
+        _, tok = _make_user("admin")
         dev_id, _ = _make_user("developer")
         r = client.patch(
             f"/api/admin/users/{dev_id}/role",
@@ -308,6 +159,7 @@ class TestUpdateUserRole:
         )
         assert r.status_code == 200
         assert r.json()["role"] == "project_manager"
+        assert persistence.get_user(dev_id)["role"] == "project_manager"
 
     def test_admin_can_demote_project_manager_to_developer(self):
         _, tok = _make_user("admin")
@@ -320,14 +172,16 @@ class TestUpdateUserRole:
         assert r.status_code == 200
         assert r.json()["role"] == "developer"
 
-    def test_admin_cannot_change_own_role(self):
+    @pytest.mark.parametrize("new_role", ["developer", "project_manager"])
+    def test_admin_cannot_demote_self(self, new_role):
         admin_id, tok = _make_user("admin")
         r = client.patch(
             f"/api/admin/users/{admin_id}/role",
-            json={"role": "developer"},
+            json={"role": new_role},
             headers=_auth(tok),
         )
-        assert r.status_code == 403
+        assert r.status_code == 400
+        assert persistence.get_user(admin_id)["role"] == "admin"
 
     def test_invalid_role_returns_422(self):
         _, tok = _make_user("admin")
@@ -357,7 +211,7 @@ class TestUpdateUserRole:
             json={"role": "project_manager"},
             headers=_auth(tok),
         )
-        assert any(log["action"] == "role_change" for log in _IN_MEMORY_AUDIT)
+        assert any(log["action"] == "role_change" for log in persistence.get_audit_logs())
 
     def test_role_change_audit_mentions_old_and_new_role(self):
         _, tok = _make_user("admin")
@@ -367,7 +221,7 @@ class TestUpdateUserRole:
             json={"role": "admin"},
             headers=_auth(tok),
         )
-        audit = next(l for l in _IN_MEMORY_AUDIT if l["action"] == "role_change")
+        audit = next(l for l in persistence.get_audit_logs() if l["action"] == "role_change")
         assert "developer" in audit["detail"]
         assert "admin" in audit["detail"]
 
@@ -391,10 +245,12 @@ class TestActivateDeactivate:
         assert r.status_code == 200
         assert r.json()["is_active"] is True
 
-    def test_admin_cannot_deactivate_self(self):
+    @pytest.mark.parametrize("prefix", ["/api/admin/users", "/api/users", "/users"])
+    def test_admin_cannot_deactivate_self(self, prefix):
         admin_id, tok = _make_user("admin")
-        r = client.post(f"/api/admin/users/{admin_id}/deactivate", headers=_auth(tok))
-        assert r.status_code == 403
+        r = client.post(f"{prefix}/{admin_id}/deactivate", headers=_auth(tok))
+        assert r.status_code == 400
+        assert persistence.get_user(admin_id)["is_active"] is True
 
     def test_admin_cannot_activate_self(self):
         admin_id, tok = _make_user("admin")
@@ -417,13 +273,13 @@ class TestActivateDeactivate:
         _, tok = _make_user("admin")
         dev_id, _ = _make_user("developer")
         client.post(f"/api/admin/users/{dev_id}/deactivate", headers=_auth(tok))
-        assert any(l["action"] == "user_deactivated" for l in _IN_MEMORY_AUDIT)
+        assert any(l["action"] == "user_deactivated" for l in persistence.get_audit_logs())
 
     def test_activation_creates_audit_log(self):
         _, tok = _make_user("admin")
         dev_id, _ = _make_user("developer", is_active=False)
         client.post(f"/api/admin/users/{dev_id}/activate", headers=_auth(tok))
-        assert any(l["action"] == "user_activated" for l in _IN_MEMORY_AUDIT)
+        assert any(l["action"] == "user_activated" for l in persistence.get_audit_logs())
 
 
 # ===========================================================================
@@ -431,27 +287,31 @@ class TestActivateDeactivate:
 # ===========================================================================
 
 class TestDeactivatedUserAuth:
-    def test_deactivated_user_gets_401_on_me(self):
-        # Create a user, deactivate them in-store, then try /auth/me
-        from bson import ObjectId
+    @pytest.mark.parametrize("role", ["developer", "admin"])
+    def test_deactivation_rejects_an_existing_session(self, role):
+        _, acting_admin = _make_user("admin")
+        uid, token = _make_user(role)
+        headers = _auth(token)
+        assert client.get("/auth/me", headers=headers).status_code == 200
 
-        oid = ObjectId()
-        _IN_MEMORY_USERS[str(oid)] = {
-            "_id": oid,
-            "name": "Soon Inactive",
-            "email": "inactive@test.com",
-            "role": "developer",
-            "is_active": False,
-            "createdAt": "",
-        }
-        token = create_access_token({"sub": str(oid), "role": "developer"})
-        r = client.get("/auth/me", headers=_auth(token))
-        assert r.status_code == 401
+        response = client.post(f"/api/admin/users/{uid}/deactivate", headers=_auth(acting_admin))
+        assert response.status_code == 200
+        assert persistence.get_user(uid)["is_active"] is False
+        assert client.get("/auth/me", headers=headers).status_code == 401
+        assert client.get("/api/admin/users", headers=headers).status_code == 401
 
-    def test_active_user_gets_200_on_me(self):
-        uid, tok = _make_user("developer", is_active=True)
-        r = client.get("/auth/me", headers=_auth(tok))
-        assert r.status_code == 200
+    def test_deactivated_account_cannot_start_a_new_session(self):
+        credentials = {"email": "inactive@example.com", "password": "Password123!"}
+        signup = client.post("/auth/signup", json={"name": "Developer", **credentials})
+        assert signup.status_code == 201
+        uid = signup.json()["user"]["id"]
+        _, admin_token = _make_user("admin")
+        deactivated = client.post(f"/api/admin/users/{uid}/deactivate", headers=_auth(admin_token))
+        assert deactivated.status_code == 200
+
+        login = client.post("/auth/login", json=credentials)
+        assert login.status_code == 401
+        assert "access_token" not in login.json()
 
 
 # ===========================================================================
@@ -462,7 +322,7 @@ class TestAuditLogs:
     def test_admin_can_fetch_audit_logs(self):
         _, tok = _make_user("admin")
         # Pre-populate one log entry
-        _IN_MEMORY_AUDIT.append(
+        persistence.create_audit_log(
             {
                 "_id": ObjectId(),
                 "action": "test_action",
@@ -480,7 +340,7 @@ class TestAuditLogs:
 
     def test_audit_log_response_schema(self):
         _, tok = _make_user("admin")
-        _IN_MEMORY_AUDIT.append(
+        persistence.create_audit_log(
             {
                 "_id": ObjectId(),
                 "action": "schema_check",
@@ -499,7 +359,7 @@ class TestAuditLogs:
     def test_audit_logs_limit_param(self):
         _, tok = _make_user("admin")
         for i in range(10):
-            _IN_MEMORY_AUDIT.append(
+            persistence.create_audit_log(
                 {
                     "_id": ObjectId(),
                     "action": f"action_{i}",
@@ -509,62 +369,83 @@ class TestAuditLogs:
             )
         r = client.get("/api/admin/audit-logs?limit=3", headers=_auth(tok))
         assert r.status_code == 200
-        # Limit is passed to persistence; our mock returns all, so just assert no error.
-        assert isinstance(r.json(), list)
-
-    def test_non_admin_cannot_fetch_audit_logs(self):
-        _, tok = _make_user("developer")
-        r = client.get("/api/admin/audit-logs", headers=_auth(tok))
-        assert r.status_code == 403
-
+        assert len(r.json()) == 3
 
 # ===========================================================================
 # 7. JWT `role` claim in access tokens (signup & login)
 # ===========================================================================
 
 class TestJWTRoleClaim:
-    # These tests rely on the real MockUsersCollection so signup/login work.
-
-    def test_signup_token_contains_role_claim(self):
+    def test_signup_cannot_choose_admin_role(self):
         r = client.post(
             "/auth/signup",
-            json={"name": "Role Tester", "email": "roletest@ex.com", "password": "Password123!"},
+            json={
+                "name": "Role Tester", "email": "roletest@ex.com",
+                "password": "Password123!", "role": "admin",
+            },
         )
         assert r.status_code == 201
         token = r.json()["access_token"]
         payload = decode_access_token(token)
-        assert "role" in payload
         assert payload["role"] == "developer"
+        assert persistence.get_user(payload["sub"])["role"] == "developer"
+        assert client.get("/api/admin/users", headers=_auth(token)).status_code == 403
 
-    def test_login_token_contains_role_claim(self):
-        # Signup first to create the user
-        client.post(
-            "/auth/signup",
-            json={"name": "Role Login", "email": "rolelogin@ex.com", "password": "Password123!"},
+    def test_login_token_reflects_updated_role(self):
+        credentials = {"email": "rolelogin@ex.com", "password": "Password123!"}
+        signup = client.post("/auth/signup", json={"name": "Role Login", **credentials})
+        assert signup.status_code == 201
+        uid = signup.json()["user"]["id"]
+        _, admin_token = _make_user("admin")
+        promoted = client.patch(
+            f"/api/admin/users/{uid}/role",
+            headers=_auth(admin_token),
+            json={"role": "admin"},
         )
-        r = client.post(
-            "/auth/login",
-            json={"email": "rolelogin@ex.com", "password": "Password123!"},
+        assert promoted.status_code == 200
+        login = client.post("/auth/login", json=credentials)
+        assert login.status_code == 200
+        assert decode_access_token(login.json()["access_token"])["role"] == "admin"
+
+    def test_demoted_admin_loses_access_with_existing_token(self):
+        _, acting_admin = _make_user("admin")
+        uid, token = _make_user("admin")
+        headers = _auth(token)
+        assert client.get("/api/admin/users", headers=headers).status_code == 200
+
+        response = client.patch(
+            f"/api/admin/users/{uid}/role",
+            headers=_auth(acting_admin),
+            json={"role": "developer"},
         )
-        assert r.status_code == 200
-        token = r.json()["access_token"]
-        payload = decode_access_token(token)
-        assert "role" in payload
+        assert response.status_code == 200
+        assert client.get("/auth/me", headers=headers).json()["role"] == "developer"
+        assert client.get("/api/admin/users", headers=headers).status_code == 403
 
-    def test_token_role_reflects_user_role(self):
-        """Tokens for a manually inserted admin user carry the 'admin' role."""
-        from bson import ObjectId
 
-        oid = ObjectId()
-        _IN_MEMORY_USERS[str(oid)] = {
-            "_id": oid,
-            "name": "Admin Guy",
-            "email": "adminguy@ex.com",
-            "password_hash": "x",
-            "role": "admin",
-            "is_active": True,
-            "createdAt": "",
-        }
-        token = create_access_token({"sub": str(oid), "role": "admin"})
-        payload = decode_access_token(token)
-        assert payload["role"] == "admin"
+@pytest.mark.parametrize("role", ["admin", "project_manager", "developer"])
+def test_project_access_for_non_member(role):
+    owner_id, owner_token = _make_user("project_manager")
+    created = client.post("/api/projects", json={"name": "Private project"}, headers=_auth(owner_token))
+    assert created.status_code == 201
+    project_id = created.json()["id"]
+    path = f"/api/projects/{project_id}"
+
+    _, token = _make_user(role)
+    headers = _auth(token)
+    listing = client.get("/api/projects", headers=headers)
+    assert listing.status_code == 200
+    detail = client.get(path, headers=headers)
+    update = client.patch(path, json={"name": "Updated project"}, headers=headers)
+
+    if role == "admin":
+        assert [p["id"] for p in listing.json()] == [project_id]
+        assert detail.status_code == 200
+        assert detail.json()["ownerId"] == owner_id
+        assert update.status_code == 200
+        assert persistence.get_project(project_id)["name"] == "Updated project"
+    else:
+        assert listing.json() == []
+        assert detail.status_code == 403
+        assert update.status_code == 403
+        assert persistence.get_project(project_id)["name"] == "Private project"

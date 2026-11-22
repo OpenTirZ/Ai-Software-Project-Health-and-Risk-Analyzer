@@ -126,7 +126,10 @@ def login(payload: LoginRequest):
     if not user:
         raise invalid_exc
 
-    if not verify_password(payload.password, user.get("password_hash", "")):
+    if (
+        not verify_password(payload.password, user.get("password_hash", ""))
+        or user.get("is_active") is False
+    ):
         raise invalid_exc
 
     access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})

@@ -77,6 +77,7 @@ export const AdminPanel: React.FC = () => {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const errorMessage = tab === 'users' ? userError : auditError;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -120,6 +121,7 @@ export const AdminPanel: React.FC = () => {
 
   const handleRoleChange = async (user: AdminUser, newRole: AdminUser['role']) => {
     if (newRole === user.role) return;
+    setUserError(null);
     setPendingAction((p) => ({ ...p, [user.id]: 'role' }));
     setActionFeedback((f) => ({ ...f, [user.id]: null }));
     try {
@@ -128,13 +130,14 @@ export const AdminPanel: React.FC = () => {
       setActionFeedback((f) => ({ ...f, [user.id]: '✓ Role updated' }));
       setTimeout(() => setActionFeedback((f) => ({ ...f, [user.id]: null })), 2500);
     } catch (err: any) {
-      setActionFeedback((f) => ({ ...f, [user.id]: err.message || 'Error updating role' }));
+      setUserError(err.message || 'Error updating role');
     } finally {
       setPendingAction((p) => ({ ...p, [user.id]: null }));
     }
   };
 
   const handleToggleStatus = async (user: AdminUser) => {
+    setUserError(null);
     setPendingAction((p) => ({ ...p, [user.id]: 'status' }));
     setActionFeedback((f) => ({ ...f, [user.id]: null }));
     try {
@@ -146,7 +149,7 @@ export const AdminPanel: React.FC = () => {
       }));
       setTimeout(() => setActionFeedback((f) => ({ ...f, [user.id]: null })), 2500);
     } catch (err: any) {
-      setActionFeedback((f) => ({ ...f, [user.id]: err.message || 'Error toggling status' }));
+      setUserError(err.message || 'Error toggling status');
     } finally {
       setPendingAction((p) => ({ ...p, [user.id]: null }));
     }
@@ -154,6 +157,19 @@ export const AdminPanel: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
+      {errorMessage && (
+        <div role="alert" className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100%-2rem)] items-center gap-3 rounded-xl border border-[#F8A9A9] bg-[#FEE2E2] p-3 text-sm text-[#A3151F] shadow-lg">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {errorMessage}
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={() => tab === 'users' ? setUserError(null) : setAuditError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="hero-vibrant rounded-xl p-6 md:p-8 border border-[#E5344A]/40 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#E5344A]/20 rounded-full blur-3xl pointer-events-none" />
@@ -240,13 +256,6 @@ export const AdminPanel: React.FC = () => {
             {loadingUsers ? 'Loading…' : `${total} user${total !== 1 ? 's' : ''} found`}
           </div>
 
-          {userError && (
-            <div className="m-4 p-3 rounded-xl bg-[#FEE2E2] border border-[#F8A9A9] flex items-center gap-2 text-xs text-[#A3151F]">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {userError}
-            </div>
-          )}
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -331,14 +340,8 @@ export const AdminPanel: React.FC = () => {
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {feedback && (
-                              <span
-                                className={`text-[11px] font-semibold flex items-center gap-1 ${
-                                  feedback.startsWith('✓') ? 'text-[#15803D]' : 'text-[#A3151F]'
-                                }`}
-                              >
-                                {feedback.startsWith('✓') && (
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                )}
+                              <span className="text-[11px] font-semibold flex items-center gap-1 text-[#15803D]">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
                                 {feedback}
                               </span>
                             )}
@@ -394,13 +397,6 @@ export const AdminPanel: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${loadingAudit ? 'animate-spin' : ''}`} />
             </button>
           </div>
-
-          {auditError && (
-            <div className="m-4 p-3 rounded-xl bg-[#FEE2E2] border border-[#F8A9A9] flex items-center gap-2 text-xs text-[#A3151F]">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {auditError}
-            </div>
-          )}
 
           {loadingAudit ? (
             <div className="py-12 flex flex-col items-center gap-2 text-slate-400 text-xs">
