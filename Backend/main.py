@@ -30,6 +30,7 @@ from Backend.auth.lifecycle import router as lifecycle_router
 from Backend.auth.router import router as auth_router
 from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
+from Backend.routers.admin_router import router as admin_router
 from Backend.routers.data_sync_router import router as data_sync_router
 from Backend.routers.metric_router import router as metric_router
 from Backend.routers.project_lifecycle_router import router as project_lifecycle_router
@@ -175,6 +176,7 @@ app.include_router(threshold_router)
 app.include_router(metric_router)
 app.include_router(report_router)
 app.include_router(lifecycle_router)
+app.include_router(admin_router)
 
 
 # ---------------------------------------------------------------------------

@@ -9,7 +9,8 @@ import {
   Activity as ActivityIcon, 
   FileText, 
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  Settings2,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -20,14 +21,16 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNavigate, onLogout }) => {
+  const isAdmin = currentUser?.role === 'admin';
+
   const navItems = [
-    { id: 'projects', label: 'All Repositories', icon: FolderGit2 },
-    { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
-    { id: 'health-analysis', label: 'Health Analysis', icon: HeartPulse },
-    { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
-    { id: 'contributors', label: 'Team and Contributors', icon: Users },
-    { id: 'activity', label: 'Activity', icon: ActivityIcon },
-    { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'projects',       label: 'All Repositories',       icon: FolderGit2 },
+    { id: 'overview',       label: 'Project Overview',        icon: LayoutDashboard },
+    { id: 'health-analysis',label: 'Health Analysis',         icon: HeartPulse },
+    { id: 'risk-analysis',  label: 'Risk and Vulnerability',  icon: ShieldAlert },
+    { id: 'contributors',   label: 'Team and Contributors',   icon: Users },
+    { id: 'activity',       label: 'Activity',                icon: ActivityIcon },
+    { id: 'reports',        label: 'Reports',                 icon: FileText },
   ] as const;
 
   const initials = currentUser?.fullName
@@ -59,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
               Aegis AI
             </h1>
             <p className="text-[10px] text-slate-400 font-medium tracking-tight">
-              AI Software Project Health & Risk Analyzer
+              AI Software Project Health &amp; Risk Analyzer
             </p>
           </div>
         </div>
@@ -93,6 +96,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
             </button>
           );
         })}
+
+        {/* Admin Panel — only visible to admins */}
+        {isAdmin && (
+          <>
+            <div className="pt-3 pb-1 px-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                Administration
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('admin')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-[10px] text-[14px] font-medium transition-all duration-200 flex items-center gap-3 ${
+                currentView === 'admin'
+                  ? 'text-white shadow-md shadow-purple-600/30 relative overflow-hidden font-semibold'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+              style={
+                currentView === 'admin'
+                  ? {
+                      background: 'linear-gradient(90deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2)), linear-gradient(90deg, rgb(147,51,234), rgb(99,102,241))',
+                    }
+                  : undefined
+              }
+            >
+              <Settings2 className={`w-4 h-4 shrink-0 ${currentView === 'admin' ? 'text-white' : 'text-slate-400'}`} />
+              <span className="truncate">Admin Panel</span>
+            </button>
+          </>
+        )}
       </nav>
 
       {/* User Footer Profile */}
@@ -100,6 +132,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
         <button
           onClick={() => onNavigate('profile')}
           className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 transition-colors text-left cursor-pointer"
+          aria-label={`View profile for ${displayName}`}
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
             {initials}
@@ -118,6 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
         <button
           onClick={onLogout}
           className="mt-2.5 w-full flex items-center justify-center gap-2 py-1.5 text-xs font-medium text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+          aria-label="Logout"
         >
           <LogOut className="w-3.5 h-3.5" />
           <span>Logout</span>

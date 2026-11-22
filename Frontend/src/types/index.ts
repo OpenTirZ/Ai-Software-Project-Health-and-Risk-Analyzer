@@ -10,7 +10,8 @@ export type PageView =
   | 'contributors'
   | 'activity'
   | 'reports'
-  | 'profile';
+  | 'profile'
+  | 'admin';
 
 export interface UserProfileData {
   id?: string;

@@ -47,6 +47,7 @@ export const Projects: React.FC<ProjectsProps> = ({
               onClick={onRefreshProjects}
               className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-50 shadow-sm transition-all cursor-pointer"
               title="Refresh projects list"
+              aria-label="Refresh projects list"
             >
               <RefreshCw className="w-4 h-4" />
             </button>

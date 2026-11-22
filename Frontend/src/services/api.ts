@@ -1055,7 +1055,117 @@ export const reportApi = {
 };
 
 // ===========================================================================
-// 8. USER SETTINGS API (/api/auth/me/settings)
+// 8. ADMIN API (/api/admin)
+// ===========================================================================
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'project_manager' | 'developer';
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PaginatedUsersResponse {
+  items: AdminUser[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  actor_id: string;
+  target_id: string | null;
+  detail: string | null;
+  created_at: string;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('aegis_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export const adminApi = {
+  /**
+   * List platform users with optional search, active-status filter and pagination.
+   * Calls: GET /api/admin/users
+   */
+  async getUsers(params?: {
+    search?: string;
+    is_active?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<PaginatedUsersResponse> {
+    const qs = new URLSearchParams();
+    if (params?.search)             qs.set('search',    params.search);
+    if (params?.is_active != null)  qs.set('is_active', String(params.is_active));
+    if (params?.skip    != null)    qs.set('skip',      String(params.skip));
+    if (params?.limit   != null)    qs.set('limit',     String(params.limit));
+
+    const url = `${API_BASE_URL}/admin/users${qs.toString() ? `?${qs}` : ''}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch users (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Update a user's platform role.
+   * Calls: PATCH /api/admin/users/{id}/role
+   */
+  async updateUserRole(userId: string, role: AdminUser['role']): Promise<AdminUser> {
+    const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to update role (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Toggle a user's active status (activate or deactivate).
+   * Calls: POST /api/admin/users/{id}/activate  |  /deactivate
+   */
+  async toggleUserStatus(userId: string, activate: boolean): Promise<AdminUser> {
+    const action = activate ? 'activate' : 'deactivate';
+    const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/${action}`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to ${action} user (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Fetch recent platform audit logs.
+   * Calls: GET /api/admin/audit-logs
+   */
+  async getAuditLogs(limit = 100): Promise<AuditLog[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/audit-logs?limit=${limit}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch audit logs (${res.status})`));
+    }
+    return res.json();
+  },
+};
+
+// ===========================================================================
+// 9. USER SETTINGS API (/api/auth/me/settings)
 // ===========================================================================
 export interface NotificationPreferences {
   high_risk_threshold: boolean;

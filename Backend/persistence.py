@@ -184,6 +184,45 @@ def get_users():
         raise DatabaseError("A database error occurred while retrieving users.") from exc
 
 
+def list_users_paginated(
+    search: str | None = None,
+    is_active: bool | None = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> tuple[list[dict], int]:
+    """
+    Return a page of users with optional search (name/email) and active-status
+    filter.  Returns (documents, total_count) where total_count reflects the
+    filtered set (before pagination).
+    """
+    import re as _re
+
+    query: dict = {}
+    if search:
+        # Case-insensitive search across name and email fields.
+        escaped = _re.escape(search.strip())
+        pattern = {"$regex": escaped, "$options": "i"}
+        query["$or"] = [{"name": pattern}, {"email": pattern}]
+    if is_active is not None:
+        query["is_active"] = is_active
+
+    try:
+        total = users_collection.count_documents(query)
+        documents = (
+            users_collection.find(query)
+            .sort("createdAt", -1)
+            .skip(skip)
+            .limit(limit)
+        )
+        return [serialize_document(doc) for doc in documents], total
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        logger.error("Database unreachable during list_users_paginated: %s", exc)
+        raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+    except PyMongoError as exc:
+        logger.error("Database error during list_users_paginated: %s", exc)
+        raise DatabaseError("A database error occurred while listing users.") from exc
+
+
 def update_user(user_id, update_data):
     try:
         result = users_collection.update_one(
