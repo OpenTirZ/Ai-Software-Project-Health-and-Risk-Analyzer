@@ -32,6 +32,7 @@ from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
 from Backend.routers.data_sync_router import router as data_sync_router
 from Backend.routers.metric_router import router as metric_router
+from Backend.routers.project_lifecycle_router import router as project_lifecycle_router
 from Backend.routers.project_router import router as project_router
 from Backend.routers.report_router import router as report_router
 from Backend.routers.repository_router import router as repository_router
@@ -167,6 +168,7 @@ app.include_router(auth_router)
 app.include_router(auth_router, prefix="/api")
 
 app.include_router(project_router)
+app.include_router(project_lifecycle_router)
 app.include_router(repository_router)
 app.include_router(data_sync_router)
 app.include_router(threshold_router)

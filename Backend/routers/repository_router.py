@@ -92,8 +92,19 @@ def connect_repository_endpoint(
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(status_code=404, detail="Project not found.")
+
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is archived and read-only. Cannot connect repository.",
+        )
 
     is_admin = current_user.get("role", "").strip().lower() == "admin"
     if not is_admin and not _is_project_owner(project, user_id):
@@ -148,6 +159,13 @@ def list_repositories_endpoint(
 
     results: List[RepositoryItemResponse] = []
     for p in projects:
+        if (
+            p.get("status") == "deleted"
+            or p.get("is_active") is False
+            or p.get("deletion_status") in ("pending", "completed")
+        ):
+            continue
+
         repo_url = p.get("repo_url")
         if not repo_url:
             continue

@@ -88,14 +88,20 @@ def generate_scheduled_report(
         trigger_type.value if isinstance(trigger_type, TriggerType) else str(trigger_type).lower()
     )
 
-    # 1. Fetch project and verify existence
+    # 1. Fetch project and verify existence and active lifecycle status
     project = get_project(clean_project_id)
-    if not project:
-        logger.error("Cannot generate report: Project %s not found.", clean_project_id)
+    if (
+        not project
+        or project.get("status") in ("archived", "deleted")
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
+        status_label = project.get("status") if project else "not found"
+        logger.info("Cannot generate report: Project %s is %s.", clean_project_id, status_label)
         return {
             "success": False,
             "project_id": clean_project_id,
-            "error": f"Project {clean_project_id} not found",
+            "error": f"Project {clean_project_id} is {status_label}",
             "deliveries": {},
         }
 
@@ -305,6 +311,20 @@ def is_schedule_due(schedule: Dict[str, Any], now: Optional[datetime] = None) ->
     """
     if not schedule.get("enabled", True):
         return False
+
+    project_id = schedule.get("projectId")
+    if project_id:
+        try:
+            proj = get_project(str(project_id))
+            if (
+                not proj
+                or proj.get("status") in ("archived", "deleted")
+                or proj.get("is_active") is False
+                or proj.get("deletion_status") in ("pending", "completed")
+            ):
+                return False
+        except Exception:
+            pass
 
     now_utc = now or datetime.now(timezone.utc)
     trigger_type = str(schedule.get("triggerType", "")).lower()

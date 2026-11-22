@@ -21,6 +21,9 @@ from Backend.database import (
     org_settings_collection,
     audit_logs_collection,
     contributors_collection,
+    milestones_collection,
+    metric_snapshots_collection,
+    report_schedules_collection,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +53,47 @@ def to_object_id(value):
         raise ValueError(f"Invalid ObjectId: {value}")
 
     return ObjectId(value)
+
+
+def _check_project_writable(project_id):
+    """Check that a project is active and writable before persisting synchronized telemetry."""
+    project_oid = to_object_id(project_id)
+    doc = projects_collection.find_one(
+        {"_id": project_oid},
+        {"status": 1, "is_active": 1, "deletion_status": 1}
+    )
+    if not doc:
+        raise DatabaseError("Project not found.")
+    if (
+        doc.get("status") in ("archived", "deleted")
+        or doc.get("is_active") is False
+        or doc.get("deletion_status") in ("pending", "completed")
+    ):
+        raise DatabaseError(f"Project is {doc.get('status', 'inactive')}. Write aborted.")
+    return doc
+
+
+def _reconcile_write(collection, filter_query, existing_doc, upserted_id, project_id):
+    """
+    Post-write reconciliation: If a project transitioned to archived or deleted during write,
+    revert new insert or restore previous state without setting deletedAt when archived.
+    """
+    project_oid = to_object_id(project_id)
+    post = projects_collection.find_one(
+        {"_id": project_oid},
+        {"status": 1, "is_active": 1, "deletion_status": 1, "deletedAt": 1}
+    )
+    if (
+        not post
+        or post.get("status") in ("archived", "deleted")
+        or post.get("is_active") is False
+        or post.get("deletion_status") in ("pending", "completed")
+    ):
+        if upserted_id:
+            collection.delete_one({"_id": to_object_id(upserted_id)})
+        elif existing_doc:
+            collection.replace_one({"_id": existing_doc["_id"]}, existing_doc)
+        raise DatabaseError("Project transitioned during synchronization. Telemetry write reconciled.")
 
 
 def serialize_document(document):
@@ -297,10 +341,14 @@ def upsert_commit(project_id, commit_data):
     and branch context are stored so each commit can be traced back
     to the repository and branch from which it was ingested.
     """
+    _check_project_writable(project_id)
+
     filter_query = {
         "projectId": to_object_id(project_id),
         "sha": commit_data["sha"],
     }
+
+    existing_doc = commits_collection.find_one(filter_query)
 
     update_doc = {
         "$set": {
@@ -335,6 +383,8 @@ def upsert_commit(project_id, commit_data):
         update_doc,
         upsert=True,
     )
+
+    _reconcile_write(commits_collection, filter_query, existing_doc, result.upserted_id, project_id)
 
     if result.upserted_id:
         return str(result.upserted_id)
@@ -429,9 +479,22 @@ def bulk_upsert_issues(project_id, issues):
     if not issues:
         return {"matched_count": 0, "modified_count": 0, "upserted_count": 0}
 
+    _check_project_writable(project_id)
+
     project_oid = to_object_id(project_id)
     synced_at = datetime.now(timezone.utc)
     operations = []
+
+    # Map existing issues for safe restoration if lifecycle transition occurs during bulk write
+    existing_issues = {}
+    issue_gids = [i.get("github_id") for i in issues if i.get("github_id") is not None]
+    if issue_gids:
+        try:
+            cursor = issues_collection.find({"projectId": project_oid, "github_id": {"$in": issue_gids}})
+            for doc in cursor:
+                existing_issues[doc["github_id"]] = doc
+        except Exception as e:
+            logger.warning("Could not pre-fetch existing issues for reconciliation: %s", e)
 
     for issue in issues:
         if issue.get("github_id") is None:
@@ -483,6 +546,25 @@ def bulk_upsert_issues(project_id, issues):
         raise DatabaseError(
             "A database error occurred while saving issues."
         ) from exc
+
+    # Post-write reconciliation: check if lifecycle state transitioned during write
+    post = projects_collection.find_one(
+        {"_id": project_oid},
+        {"status": 1, "is_active": 1, "deletion_status": 1}
+    )
+    if (
+        not post
+        or post.get("status") in ("archived", "deleted")
+        or post.get("is_active") is False
+        or post.get("deletion_status") in ("pending", "completed")
+    ):
+        for issue in issues:
+            gid = issue.get("github_id")
+            if gid in existing_issues:
+                issues_collection.replace_one({"_id": existing_issues[gid]["_id"]}, existing_issues[gid])
+            else:
+                issues_collection.delete_one({"projectId": project_oid, "github_id": gid})
+        raise DatabaseError("Project transitioned during synchronization. Issues batch reconciled.")
 
     return {
         "matched_count": result.matched_count,
@@ -640,16 +722,35 @@ def create_integration_credential(credential_data):
 
 
 def get_integration_credential(project_id, provider):
-    document = integration_credentials_collection.find_one(
-        {
-            "projectId": to_object_id(project_id)
-            if project_id
-            else None,
-            "provider": provider
-        }
-    )
+    if not project_id:
+        return None
+    try:
+        project_oid = to_object_id(project_id)
+        # Check parent project lifecycle status first
+        project = projects_collection.find_one(
+            {"_id": project_oid},
+            {"status": 1, "is_active": 1, "deletion_status": 1}
+        )
+        if not project:
+            return None
+        if (
+            project.get("status") in ("deleted", "archived")
+            or project.get("is_active") is False
+            or project.get("deletion_status") in ("pending", "completed")
+        ):
+            return None
 
-    return serialize_document(document)
+        document = integration_credentials_collection.find_one(
+            {
+                "projectId": project_oid,
+                "provider": provider,
+                "is_active": {"$ne": False},
+            }
+        )
+        return serialize_document(document)
+    except Exception as exc:
+        logger.error("Error retrieving integration credential: %s", exc)
+        return None
 
 
 # --------------------------------------------------
@@ -702,10 +803,14 @@ def upsert_contributor(project_id, contributor_data):
     Insert a new contributor or update an existing one.
     Uniqueness is enforced on (projectId, github_username).
     """
+    _check_project_writable(project_id)
+
     filter_query = {
         "projectId": to_object_id(project_id),
         "github_username": contributor_data["github_username"],
     }
+    existing_doc = contributors_collection.find_one(filter_query)
+
     update_doc = {
         "$set": {
             "projectId": to_object_id(project_id),
@@ -721,6 +826,8 @@ def upsert_contributor(project_id, contributor_data):
     result = contributors_collection.update_one(
         filter_query, update_doc, upsert=True
     )
+
+    _reconcile_write(contributors_collection, filter_query, existing_doc, result.upserted_id, project_id)
 
     if result.upserted_id:
         return str(result.upserted_id)
@@ -741,3 +848,145 @@ def get_contributor(contributor_id):
         {"_id": to_object_id(contributor_id)}
     )
     return serialize_document(document)
+
+
+# --------------------------------------------------
+# PROJECT LIFECYCLE PERSISTENCE (TASK-SP4-07 #114)
+# --------------------------------------------------
+
+def archive_project_conditional(project_id, now=None):
+    """
+    Atomically transition an active (or legacy) project into archived state.
+    Preserves original archivedAt if project is already archived.
+    Returns: (outcome_status, project_doc)
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    oid = to_object_id(project_id)
+
+    # 1. Atomically transition ONLY an active or legacy project
+    try:
+        result = projects_collection.update_one(
+            {
+                "_id": oid,
+                "$or": [
+                    {"status": "active"},
+                    {"status": {"$exists": False}},
+                ],
+                "deletion_status": {"$nin": ["pending", "completed"]},
+            },
+            {
+                "$set": {
+                    "status": "archived",
+                    "archivedAt": now,
+                    "updatedAt": now,
+                }
+            }
+        )
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+    except PyMongoError as exc:
+        raise DatabaseError("A database error occurred while archiving the project.") from exc
+
+    try:
+        project = projects_collection.find_one({"_id": oid})
+    except PyMongoError as exc:
+        raise DatabaseError("A database error occurred retrieving project status.") from exc
+
+    if not project:
+        return "not_found", None
+
+    if result.modified_count == 1:
+        return "archived_success", serialize_document(project)
+
+    # If not modified:
+    if project.get("status") == "archived":
+        return "already_archived", serialize_document(project)
+
+    if project.get("status") == "deleted" or project.get("deletion_status") in ("pending", "completed"):
+        return "invalid_state_deleted", serialize_document(project)
+
+    return "invalid_state", serialize_document(project)
+
+
+def soft_delete_initiate_conditional(project_id, now=None):
+    """
+    Atomically claim soft-delete initiation.
+    Preserves and returns canonical deletedAt timestamp across retries and concurrent callers.
+    Returns: (outcome_status, canonical_deleted_at, project_doc)
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    oid = to_object_id(project_id)
+
+    try:
+        existing = projects_collection.find_one({"_id": oid})
+    except PyMongoError as exc:
+        raise DatabaseError("A database error occurred while looking up project.") from exc
+
+    if not existing:
+        return "not_found", now, None
+
+    if existing.get("status") == "deleted" and existing.get("deletion_status") == "completed":
+        return "already_completed", existing.get("deletedAt") or now, serialize_document(existing)
+
+    # Atomically claim deletion initiation (for active or archived project)
+    try:
+        res = projects_collection.update_one(
+            {
+                "_id": oid,
+                "status": {"$ne": "deleted"},
+                "deletion_status": {"$exists": False},
+            },
+            {
+                "$set": {
+                    "status": "deleted",
+                    "deletion_status": "pending",
+                    "is_active": False,
+                    "deletedAt": now,
+                    "updatedAt": now,
+                }
+            }
+        )
+    except PyMongoError as exc:
+        raise DatabaseError("A database error occurred initiating soft-delete.") from exc
+
+    try:
+        project = projects_collection.find_one({"_id": oid})
+    except PyMongoError as exc:
+        raise DatabaseError("A database error occurred retrieving project state.") from exc
+
+    canonical_deleted_at = project.get("deletedAt") or now
+
+    if res.modified_count == 1:
+        return "initiated_new", canonical_deleted_at, serialize_document(project)
+    else:
+        return "resuming_pending", canonical_deleted_at, serialize_document(project)
+
+
+def soft_delete_cascade_collection(project_id, collection, update_fields):
+    """Cascade inactive status to a single associated telemetry/data collection."""
+    oid = to_object_id(project_id)
+    try:
+        collection.update_many({"projectId": oid}, {"$set": update_fields})
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        logger.error("Database unreachable cascading soft-delete on %s: %s", getattr(collection, 'name', 'collection'), exc)
+        raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+    except PyMongoError as exc:
+        logger.error("Database error cascading soft-delete on %s: %s", getattr(collection, 'name', 'collection'), exc)
+        raise DatabaseError(f"A database error occurred during soft-delete cascade.") from exc
+
+
+def soft_delete_complete(project_id):
+    """Mark soft-delete cascade as completed on project document."""
+    oid = to_object_id(project_id)
+    now = datetime.now(timezone.utc)
+    try:
+        projects_collection.update_one(
+            {"_id": oid, "deletion_status": "pending"},
+            {"$set": {"deletion_status": "completed", "updatedAt": now}}
+        )
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+    except PyMongoError as exc:
+        raise DatabaseError("A database error occurred completing soft-delete.") from exc
