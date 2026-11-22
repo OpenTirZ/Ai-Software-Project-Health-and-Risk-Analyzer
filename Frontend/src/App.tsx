@@ -236,6 +236,8 @@ export function App() {
       onSyncAll={handleSyncAllActive}
       isSyncing={isGlobalSyncing}
     >
+      {/* Keyed wrapper re-triggers the fade-up entrance on every view change */}
+      <div key={currentView} className="page-enter">
       {currentView === 'projects' && (
         <Projects
           projects={projects}
@@ -314,6 +316,7 @@ export function App() {
           loadingProjects={loadingProjects}
         />
       )}
+      </div>
     </Layout>
   );
 }

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -30,8 +31,9 @@ export const Layout: React.FC<LayoutProps> = ({
   children,
 }) => {
   return (
-    <div className="flex h-screen w-full bg-[#f8fafc] text-slate-800 overflow-hidden font-['Inter',sans-serif]">
-      {/* Sidebar */}
+    <div className="flex h-screen min-h-screen w-full overflow-hidden app-canvas text-[var(--color-text-primary)] font-['Inter',sans-serif]">
+
+      {/* Application Sidebar */}
       <Sidebar
         currentView={currentView}
         currentUser={currentUser}
@@ -39,8 +41,10 @@ export const Layout: React.FC<LayoutProps> = ({
         onLogout={onLogout}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main Application Area */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+
+        {/* Application Header */}
         <TopBar
           currentView={currentView}
           projects={projects}
@@ -52,7 +56,10 @@ export const Layout: React.FC<LayoutProps> = ({
           isSyncing={isSyncing}
         />
 
-        <main className="flex-1 overflow-y-auto bg-[#f8fafc]">
+        {/* Page Content */}
+        <main
+          className="app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        >
           {children}
         </main>
       </div>

@@ -1,8 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import type { PageView, ReportItem } from '../types';
 import { reportsData } from '../data/mockData';
 import { reportApi, type ProjectResponse } from '../services/api';
-import { Plus, Download, Eye, CheckCircle, Sparkles, X, AlertCircle } from 'lucide-react';
+import {
+  Plus,
+  Download,
+  Eye,
+  CheckCircle,
+  X,
+  AlertCircle,
+  FileText,
+} from 'lucide-react';
 
 interface ReportsProps {
   selectedRepo: string;
@@ -15,7 +24,9 @@ function escapePdf(str: string): string {
 }
 
 function generatePDFBlob(report: ReportItem): Blob {
-  const sanitize = (text: string) => escapePdf(text.replace(/[^\x20-\x7E]/g, ''));
+  const sanitize = (text: string) =>
+    escapePdf(text.replace(/[^\x20-\x7E]/g, ''));
+
   const lines = [
     'BT',
     '/F1 20 Tf',
@@ -26,12 +37,13 @@ function generatePDFBlob(report: ReportItem): Blob {
     `0 -18 Td (Overall Health Score: ${report.healthScore} / 100) Tj`,
     `0 -18 Td (Active Risks Detected: ${report.risksCount}  |  Potential Bottlenecks: ${report.bottlenecksCount}) Tj`,
     '0 -30 Td (Recommended Actions:) Tj',
-    ...report.recommendations.map((rec, idx) => `0 -18 Td (${idx + 1}. ${sanitize(rec)}) Tj`),
+    ...report.recommendations.map(
+      (rec, idx) => `0 -18 Td (${idx + 1}. ${sanitize(rec)}) Tj`,
+    ),
     'ET',
   ].join('\n');
 
-  const stream = lines;
-  const streamLen = stream.length;
+  const streamLen = streamLength(lines);
 
   const pdfParts = [
     '%PDF-1.4\n',
@@ -39,19 +51,21 @@ function generatePDFBlob(report: ReportItem): Blob {
     '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
     '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
     '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
-    `5 0 obj\n<< /Length ${streamLen} >>\nstream\n${stream}\nendstream\nendobj\n`,
+    `5 0 obj\n<< /Length ${streamLen} >>\nstream\n${lines}\nendstream\nendobj\n`,
   ];
 
   let offset = 0;
   const offsets: number[] = [0];
+
   for (let i = 0; i < pdfParts.length; i++) {
     if (i > 0) offsets.push(offset);
     offset += pdfParts[i].length;
   }
 
   let xref = 'xref\n0 6\n0000000000 65535 f \n';
+
   for (let i = 1; i <= 5; i++) {
-    xref += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+    xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
   }
 
   const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${offset}\n%%EOF`;
@@ -60,34 +74,52 @@ function generatePDFBlob(report: ReportItem): Blob {
   return new Blob([fullPdf], { type: 'application/pdf' });
 }
 
-export const Reports: React.FC<ReportsProps> = ({ selectedRepo, project }) => {
+function streamLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+export const Reports: React.FC<ReportsProps> = ({
+  selectedRepo,
+  project,
+}) => {
   const [reports, setReports] = useState<ReportItem[]>(reportsData);
-  const [selectedReport, setSelectedReport] = useState<ReportItem>(reportsData[0]);
+  const [selectedReport, setSelectedReport] = useState<ReportItem>(
+    reportsData[0],
+  );
   const [showViewModal, setShowViewModal] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (project?.id) {
-      reportApi.getReports(project.id).then((fetched) => {
+    if (!project?.id) return;
+
+    reportApi
+      .getReports(project.id)
+      .then((fetched) => {
         if (fetched.length > 0) {
           setReports(fetched);
           setSelectedReport(fetched[0]);
         }
+      })
+      .catch((err: unknown) => {
+        setApiError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to load project reports.',
+        );
       });
-    }
   }, [project?.id]);
 
   const handleGenerateReport = async () => {
     setGenerating(true);
     setApiError(null);
+
     try {
       if (project?.id) {
         const generated = await reportApi.generateReport(project.id);
         setReports((prev) => [generated, ...prev]);
         setSelectedReport(generated);
       } else {
-        // Fallback for simulation when project ID is not set
         const newReport: ReportItem = {
           id: Date.now().toString(),
           title: 'PROJECT HEALTH AUDIT REPORT',
@@ -106,11 +138,16 @@ export const Reports: React.FC<ReportsProps> = ({ selectedRepo, project }) => {
             'Zero critical CVEs discovered in container images',
           ],
         };
+
         setReports((prev) => [newReport, ...prev]);
         setSelectedReport(newReport);
       }
-    } catch (err: any) {
-      setApiError(err.message || 'Failed to generate report from backend.');
+    } catch (err: unknown) {
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to generate report from backend.',
+      );
     } finally {
       setGenerating(false);
     }
@@ -118,11 +155,18 @@ export const Reports: React.FC<ReportsProps> = ({ selectedRepo, project }) => {
 
   const handleDownloadPDF = (reportToDownload?: ReportItem) => {
     const target = reportToDownload || selectedReport;
+    if (!target) return;
+
     const blob = generatePDFBlob(target);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const cleanName = (target.project || selectedRepo).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    const cleanName = (target.project || selectedRepo).replace(
+      /[^a-zA-Z0-9_-]/g,
+      '_',
+    );
+
     link.setAttribute('download', `${cleanName}_health_report.pdf`);
     document.body.appendChild(link);
     link.click();
@@ -130,239 +174,303 @@ export const Reports: React.FC<ReportsProps> = ({ selectedRepo, project }) => {
     URL.revokeObjectURL(url);
   };
 
+  const healthColor = (score: number) => {
+    if (score < 50) return 'text-[#CC1F2E]';
+    if (score < 75) return 'text-[#B45309]';
+    return 'text-[#0B6B63]';
+  };
+
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-5 md:p-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-[#0E2A2A] md:text-3xl">
             Reports
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Generate and review project health reports for <span className="font-semibold text-slate-700">{selectedRepo}</span>.
+          <p className="mt-1 text-sm text-[#3F5F5C]">
+            Generate and review project health reports for{' '}
+            <span className="font-semibold text-[#0E2A2A]">
+              {selectedRepo}
+            </span>
+            .
           </p>
         </div>
 
-        {/* Generate Report Button */}
         <button
           onClick={handleGenerateReport}
           disabled={generating}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all hover:opacity-95 active:scale-95 cursor-pointer disabled:opacity-50"
-          style={{
-            background: 'linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%), linear-gradient(90deg, rgb(99, 102, 241) 0%, rgb(168, 85, 247) 100%)',
-          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
         >
-          {generating ? (
-            <>
-              <Sparkles className="w-4 h-4 animate-spin" />
-              <span>Analyzing & Generating...</span>
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4" />
-              <span>+ Generate Report</span>
-            </>
-          )}
+          <Plus className="h-4 w-4" />
+          {generating ? 'Generating Report...' : 'Generate Report'}
         </button>
       </div>
 
-      {/* Error Alert */}
+      {/* Error */}
       {apiError && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+        <div
+          role="alert"
+          className="flex flex-col justify-between gap-3 rounded-xl border border-[#CC1F2E]/20 bg-[#CC1F2E]/5 p-4 sm:flex-row sm:items-center"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#CC1F2E]" />
             <div>
-              <p className="font-semibold text-xs text-rose-900">Report generation failed</p>
-              <p className="text-xs text-rose-700">{apiError}</p>
+              <p className="text-sm font-semibold text-[#CC1F2E]">
+                Report operation failed
+              </p>
+              <p className="mt-1 text-sm text-[#A3151F]">{apiError}</p>
             </div>
           </div>
+
           <button
             onClick={handleGenerateReport}
-            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shrink-0"
+            disabled={generating}
+            className="shrink-0 rounded-lg bg-[#CC1F2E] px-3 py-2 text-xs font-semibold text-white hover:bg-[#A3151F] disabled:opacity-60"
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* Reports List */}
-      <div className="space-y-6">
-        {reports.map((report) => (
-          <div
-            key={report.id}
-            className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200/90 shadow-sm space-y-6 hover:border-slate-300 transition-all"
-          >
-            {/* Report Header Title */}
-            <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                  {report.title}
-                </h2>
-                <p className="text-sm font-semibold text-slate-600 mt-0.5">
-                  {report.project}
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Generated on {report.generatedDate}
-                </p>
-              </div>
+      {/* Reports */}
+      {reports.length === 0 ? (
+        <div className="rounded-xl border border-[#9ED4C8] bg-white px-6 py-14 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#CDEFE6] text-[#0B6B63]">
+            <FileText className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 text-base font-semibold text-[#0E2A2A]">
+            No reports available
+          </h2>
+          <p className="mt-2 text-sm text-[#5F7C79]">
+            Generate a project health report to get started.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {reports.map((report) => (
+            <article
+              key={report.id}
+              className="space-y-6 rounded-xl border border-[#9ED4C8] bg-white p-5 md:p-7"
+            >
+              {/* Report heading */}
+              <div className="flex flex-col justify-between gap-3 border-b border-[#9ED4C8] pb-4 sm:flex-row sm:items-start">
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-[#0E2A2A]">
+                    {report.title}
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-[#2B4745]">
+                    {report.project}
+                  </p>
+                  <p className="mt-1 text-xs text-[#5F7C79]">
+                    Generated on {report.generatedDate}
+                  </p>
+                </div>
 
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="inline-flex w-fit items-center rounded-md border border-[#9ED4C8] bg-[#CDEFE6] px-3 py-1.5 text-xs font-bold text-[#0B6B63]">
                   Health: {report.healthScore}/100
                 </span>
               </div>
-            </div>
 
-            {/* Metrics Snapshot */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-xs font-semibold text-slate-500 uppercase">
-                  Project Health
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {report.healthScore}%
-                </p>
-                <p className="text-xs text-emerald-600 mt-0.5">
-                  Automated telemetry evaluation
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-xs font-semibold text-slate-500 uppercase">
-                  Flagged Risks
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {report.risksCount}
-                </p>
-                <p className="text-xs text-amber-600 mt-0.5">
-                  Active threshold warnings
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-xs font-semibold text-slate-500 uppercase">
-                  Bottlenecks
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {report.bottlenecksCount}
-                </p>
-                <p className="text-xs text-blue-600 mt-0.5">
-                  Aging pull request queues
-                </p>
-              </div>
-            </div>
-
-            {/* Key Recommendations */}
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                Key Actionable Recommendations
-              </h3>
-              <div className="space-y-2">
-                {report.recommendations.map((rec, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-2.5 text-xs text-slate-700 bg-slate-50/70 p-3 rounded-xl border border-slate-100"
+              {/* Metrics */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
+                    Project Health
+                  </p>
+                  <p
+                    className={`mt-1 text-2xl font-bold tabular-nums ${healthColor(
+                      report.healthScore,
+                    )}`}
                   >
-                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span>{rec}</span>
-                  </div>
-                ))}
+                    {report.healthScore}%
+                  </p>
+                  <p className="mt-1 text-xs text-[#5F7C79]">
+                    Automated telemetry evaluation
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
+                    Flagged Risks
+                  </p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-[#CC1F2E]">
+                    {report.risksCount}
+                  </p>
+                  <p className="mt-1 text-xs text-[#5F7C79]">
+                    Active threshold warnings
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
+                    Bottlenecks
+                  </p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-[#B45309]">
+                    {report.bottlenecksCount}
+                  </p>
+                  <p className="mt-1 text-xs text-[#5F7C79]">
+                    Aging pull request queues
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  setSelectedReport(report);
-                  setShowViewModal(true);
-                }}
-                className="px-5 py-2 rounded-xl border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>View Report</span>
-              </button>
-
-              <button
-                onClick={() => handleDownloadPDF(report)}
-                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm shadow-blue-500/20"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download PDF</span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Report Details Modal */}
-      {showViewModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              {/* Recommendations */}
               <div>
-                <h3 className="text-xl font-bold text-slate-900">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-[#3F5F5C]">
+                  Key Actionable Recommendations
+                </h3>
+
+                <div className="space-y-2">
+                  {report.recommendations.map((rec, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start gap-3 rounded-lg border border-[#9ED4C8] bg-white p-3"
+                    >
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0B6B63]" />
+                      <span className="text-sm leading-5 text-[#2B4745]">
+                        {rec}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap justify-end gap-2 border-t border-[#9ED4C8] pt-4">
+                <button
+                  onClick={() => {
+                    setSelectedReport(report);
+                    setShowViewModal(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#9ED4C8] bg-white px-4 py-2 text-sm font-semibold text-[#0B6B63] hover:bg-[#CDEFE6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+                >
+                  <Eye className="h-4 w-4" />
+                  View Report
+                </button>
+
+                <button
+                  onClick={() => handleDownloadPDF(report)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+                >
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {/* Report details modal */}
+      {showViewModal && selectedReport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0E2A2A]/60 p-4"
+          onClick={() => setShowViewModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="report-modal-title"
+            className="max-h-[90vh] w-full max-w-2xl space-y-6 overflow-y-auto rounded-xl border border-[#9ED4C8] bg-white p-5 md:p-7"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-[#9ED4C8] pb-4">
+              <div>
+                <h3
+                  id="report-modal-title"
+                  className="text-lg font-bold text-[#0E2A2A]"
+                >
                   {selectedReport.title}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Target: {selectedReport.project} • {selectedReport.generatedDate}
+                <p className="mt-1 text-xs text-[#5F7C79]">
+                  Target: {selectedReport.project} ·{' '}
+                  {selectedReport.generatedDate}
                 </p>
               </div>
+
               <button
                 onClick={() => setShowViewModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                aria-label="Close report details"
+                className="rounded-md p-1.5 text-[#5F7C79] hover:bg-[#CDEFE6] hover:text-[#0B6B63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="p-3 bg-slate-50 rounded-lg text-center">
-                <span className="text-xs text-slate-500">Health</span>
-                <p className="text-2xl font-bold text-emerald-600">{selectedReport.healthScore}</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3 text-center">
+                <span className="text-xs text-[#5F7C79]">Health</span>
+                <p
+                  className={`mt-1 text-2xl font-bold tabular-nums ${healthColor(
+                    selectedReport.healthScore,
+                  )}`}
+                >
+                  {selectedReport.healthScore}
+                </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-lg text-center">
-                <span className="text-xs text-slate-500">Risks</span>
-                <p className="text-2xl font-bold text-amber-600">{selectedReport.risksCount}</p>
+
+              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3 text-center">
+                <span className="text-xs text-[#5F7C79]">Risks</span>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-[#CC1F2E]">
+                  {selectedReport.risksCount}
+                </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-lg text-center">
-                <span className="text-xs text-slate-500">Bottlenecks</span>
-                <p className="text-2xl font-bold text-blue-600">{selectedReport.bottlenecksCount}</p>
+
+              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3 text-center">
+                <span className="text-xs text-[#5F7C79]">Bottlenecks</span>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-[#B45309]">
+                  {selectedReport.bottlenecksCount}
+                </p>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-800">Executive Summary</h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                The software project evaluated meets the enterprise reliability criteria. No blocker regressions were detected across the master pipeline. Key improvement opportunities center around pull request aging velocity.
+            <div className="space-y-2">
+              <h4 className="text-sm font-bold text-[#0E2A2A]">
+                Executive Summary
+              </h4>
+              <p className="text-sm leading-6 text-[#3F5F5C]">
+                The software project evaluated meets the enterprise
+                reliability criteria. No blocker regressions were detected
+                across the master pipeline. Key improvement opportunities
+                center around pull request aging velocity.
               </p>
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-800">Actionable Checklist</h4>
-              <ul className="text-xs text-slate-600 space-y-2">
-                {selectedReport.recommendations.map((r, i) => (
-                  <li key={i} className="flex items-center gap-2 p-2 rounded bg-slate-50 border border-slate-100">
-                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>{r}</span>
+              <h4 className="text-sm font-bold text-[#0E2A2A]">
+                Actionable Checklist
+              </h4>
+
+              <ul className="space-y-2">
+                {selectedReport.recommendations.map((recommendation, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3"
+                  >
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0B6B63]" />
+                    <span className="text-sm leading-5 text-[#2B4745]">
+                      {recommendation}
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-[#9ED4C8] pt-4">
               <button
                 onClick={() => setShowViewModal(false)}
-                className="px-5 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                className="rounded-lg border border-[#9ED4C8] bg-white px-4 py-2 text-sm font-semibold text-[#2B4745] hover:bg-[#EAF8F3]"
               >
                 Close
               </button>
+
               <button
                 onClick={() => handleDownloadPDF(selectedReport)}
-                className="px-5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49]"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export PDF</span>
+                <Download className="h-4 w-4" />
+                Export PDF
               </button>
             </div>
           </div>

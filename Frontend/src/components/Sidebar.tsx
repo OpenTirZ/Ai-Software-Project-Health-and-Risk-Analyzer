@@ -1,15 +1,16 @@
+
 import React from 'react';
 import type { PageView, UserProfileData } from '../types';
-import { 
-  FolderGit2, 
-  LayoutDashboard, 
-  HeartPulse, 
-  ShieldAlert, 
-  Users, 
-  Activity as ActivityIcon, 
-  FileText, 
+import {
+  FolderGit2,
+  LayoutDashboard,
+  HeartPulse,
+  ShieldAlert,
+  Users,
+  Activity as ActivityIcon,
+  FileText,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -19,7 +20,12 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNavigate, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  currentView,
+  currentUser,
+  onNavigate,
+  onLogout,
+}) => {
   const navItems = [
     { id: 'projects', label: 'All Repositories', icon: FolderGit2 },
     { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
@@ -44,82 +50,96 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
   const displayRole = currentUser?.role || 'Team Member';
 
   return (
-    <aside className="w-[260px] bg-[#0c1022] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-[#1e293b]/70 select-none">
+    <aside className="flex min-h-screen w-[260px] shrink-0 flex-col hero-vibrant select-none text-white">
+
       {/* Brand Header */}
-      <div 
+      <button
+        type="button"
         onClick={() => onNavigate('overview')}
-        className="px-5 py-5 border-b border-slate-800/80 cursor-pointer hover:opacity-95 transition-opacity"
+        aria-label="Go to project overview"
+        className="flex w-full items-center gap-3 border-b border-white/15 px-5 py-5 text-left"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-[17px] font-bold text-white tracking-tight leading-tight">
-              Aegis AI
-            </h1>
-            <p className="text-[10px] text-slate-400 font-medium tracking-tight">
-              AI Software Project Health & Risk Analyzer
-            </p>
-          </div>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#E5344A] to-[#990011] shadow-lg shadow-black/30">
+          <ShieldCheck className="h-5 w-5 text-white" strokeWidth={2.4} />
         </div>
-      </div>
+
+        <div className="min-w-0">
+          <h1 className="text-[17px] font-bold leading-tight tracking-tight text-white">
+            Aegis AI
+          </h1>
+          <p className="mt-1 text-[10px] font-medium leading-relaxed text-white/70">
+            AI Software Project Health & Risk Analyzer
+          </p>
+        </div>
+      </button>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
+      <nav
+        aria-label="Main navigation"
+        className="flex-1 space-y-1 overflow-y-auto px-3 py-6"
+      >
+        <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">
+          Workspace
+        </p>
+
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentView === item.id;
-          
+
           return (
             <button
               key={item.id}
+              type="button"
               onClick={() => onNavigate(item.id as PageView)}
-              className={`w-full text-left px-3.5 py-2.5 rounded-[10px] text-[14px] font-medium transition-all duration-200 flex items-center gap-3 ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex w-full items-center gap-3 rounded-md border-l-[3px] px-3 py-2.5 text-left text-[13px] ${
                 isActive
-                  ? 'text-white shadow-md shadow-indigo-600/30 relative overflow-hidden font-semibold'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  ? 'border-[#FF8A95] bg-gradient-to-r from-[#C8102E] to-[#8A000F] font-semibold text-white shadow-lg shadow-black/30'
+                  : 'border-transparent font-medium text-white/75 hover:translate-x-1 hover:bg-white/10 hover:text-white'
               }`}
-              style={
-                isActive
-                  ? {
-                      background: 'linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%), linear-gradient(90deg, rgb(99, 102, 241) 0%, rgb(168, 85, 247) 100%)',
-                    }
-                  : undefined
-              }
             >
-              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              <Icon
+                className={`h-[17px] w-[17px] shrink-0 ${
+                  isActive ? 'text-white' : 'text-white/70'
+                }`}
+                strokeWidth={1.9}
+              />
+
               <span className="truncate">{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      {/* User Footer Profile */}
-      <div className="p-3 border-t border-slate-800/80 bg-[#090d1c]">
+      {/* User Profile and Logout */}
+      <div className="border-t border-white/15 p-3">
+
         <button
+          type="button"
           onClick={() => onNavigate('profile')}
-          className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 transition-colors text-left cursor-pointer"
+          className="flex w-full items-center gap-3 rounded-md border border-white/15 bg-white/10 p-3 text-left hover:bg-white/15"
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E5344A] to-[#990011] text-xs font-bold text-white">
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-slate-100 truncate">
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-semibold text-white">
               {displayName}
             </p>
-            <p className="text-[11px] text-slate-400 truncate">
-              {currentUser?.username ? `${currentUser.username}` : displayRole}
+
+            <p className="mt-0.5 truncate text-[11px] text-white/65">
+              {currentUser?.username || displayRole}
             </p>
           </div>
         </button>
 
-        {/* Logout */}
         <button
+          type="button"
           onClick={onLogout}
-          className="mt-2.5 w-full flex items-center justify-center gap-2 py-1.5 text-xs font-medium text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="h-4 w-4" />
           <span>Logout</span>
         </button>
       </div>
