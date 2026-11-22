@@ -86,7 +86,7 @@ def signup(payload: SignupRequest):
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    access_token = create_access_token({"sub": user_id})
+    access_token = create_access_token({"sub": user_id, "role": user_doc["role"]})
     user_doc["_id"] = user_id  # add id for the response
 
     return TokenResponse(
@@ -129,7 +129,7 @@ def login(payload: LoginRequest):
     if not verify_password(payload.password, user.get("password_hash", "")):
         raise invalid_exc
 
-    access_token = create_access_token({"sub": user["_id"]})
+    access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})
 
     return TokenResponse(
         access_token=access_token,
