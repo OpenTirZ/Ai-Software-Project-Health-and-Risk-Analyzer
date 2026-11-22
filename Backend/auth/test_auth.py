@@ -64,12 +64,17 @@ class MockUsersCollection:
         if "email" in query:
             email_q = query["email"]
             if isinstance(email_q, dict) and "$regex" in email_q:
-                target = email_q["$regex"].replace("^", "").replace("$", "").lower()
+                import re as _re
+                flags = _re.IGNORECASE if "i" in email_q.get("$options", "") else 0
+                pattern = _re.compile(email_q["$regex"], flags)
+                for doc in _IN_MEMORY_USERS.values():
+                    if pattern.search(doc.get("email", "")):
+                        return doc
             else:
-                target = str(email_q).lower()
-            for doc in _IN_MEMORY_USERS.values():
-                if doc.get("email", "").lower() == target:
-                    return doc
+                target = str(email_q).strip().lower()
+                for doc in _IN_MEMORY_USERS.values():
+                    if doc.get("email", "").strip().lower() == target:
+                        return doc
         return None
 
     def delete_many(self, query):
