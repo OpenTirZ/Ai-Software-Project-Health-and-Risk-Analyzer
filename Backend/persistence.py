@@ -428,6 +428,9 @@ def upsert_commit(project_id, commit_data):
     if result.upserted_id:
         return str(result.upserted_id)
 
+    if existing_doc and "_id" in existing_doc:
+        return str(existing_doc["_id"])
+
     document = commits_collection.find_one(filter_query)
     return str(document["_id"]) if document else None
 
@@ -870,6 +873,9 @@ def upsert_contributor(project_id, contributor_data):
 
     if result.upserted_id:
         return str(result.upserted_id)
+
+    if existing_doc and "_id" in existing_doc:
+        return str(existing_doc["_id"])
 
     document = contributors_collection.find_one(filter_query)
     return str(document["_id"]) if document else None
