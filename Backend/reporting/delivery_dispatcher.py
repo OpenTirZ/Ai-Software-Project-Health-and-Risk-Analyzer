@@ -169,11 +169,11 @@ def build_report_email_content(report: Dict[str, Any]) -> tuple[str, str, str]:
     active_flags = report.get("activeFlags") or report.get("active_flags") or []
     flags_count = len(active_flags)
 
-    subject = f"[Aegis AI] Health Report: {project_name} - {health_status} ({score_display})"
+    subject = f"[कVaच] Health Report: {project_name} - {health_status} ({score_display})"
 
     # Plain text body
     lines = [
-        f"Aegis AI Project Health Report",
+        f"कVaच Project Health Report",
         f"==============================",
         f"Project:      {project_name}",
         f"Health:       {health_status} (Score: {score_display})",
@@ -192,9 +192,9 @@ def build_report_email_content(report: Dict[str, Any]) -> tuple[str, str, str]:
 
     lines.extend([
         "",
-        "View the full interactive telemetry breakdown in your Aegis AI Dashboard.",
+        "View the full interactive telemetry breakdown in your कVaच Dashboard.",
         "---",
-        "Automated notification sent by Aegis AI Project Health Analyzer.",
+        "Automated notification sent by कVaच Project Health Analyzer.",
     ])
     plain_body = "\n".join(lines)
 
@@ -222,7 +222,7 @@ def build_report_email_content(report: Dict[str, Any]) -> tuple[str, str, str]:
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px; color: #0f172a;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
         <div style="background-color: #0c1022; padding: 20px 24px; color: #ffffff;">
-          <h2 style="margin: 0; font-size: 20px; font-weight: 700;">Aegis AI Health Report</h2>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 700;">कVaच Health Report</h2>
           <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8;">Automated Recurring Project Health & Risk Telemetry</p>
         </div>
         <div style="padding: 24px;">
@@ -241,7 +241,7 @@ def build_report_email_content(report: Dict[str, Any]) -> tuple[str, str, str]:
           </ul>
         </div>
         <div style="background-color: #f8fafc; padding: 14px 24px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center;">
-          Sent by Aegis AI Automated Report Dispatcher
+          Sent by कVaच Automated Report Dispatcher
         </div>
       </div>
     </body>
@@ -274,7 +274,7 @@ def build_slack_blocks(report: Dict[str, Any]) -> Dict[str, Any]:
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": f":bar_chart: Aegis AI Report: {project_name}",
+                "text": f":bar_chart: कVaच Report: {project_name}",
                 "emoji": True,
             },
         },
@@ -318,7 +318,7 @@ def build_slack_blocks(report: Dict[str, Any]) -> Dict[str, Any]:
         "elements": [
             {
                 "type": "mrkdwn",
-                "text": f"Generated at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | Aegis AI Automated Dispatcher",
+                "text": f"Generated at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | कVaच Automated Dispatcher",
             }
         ],
     })

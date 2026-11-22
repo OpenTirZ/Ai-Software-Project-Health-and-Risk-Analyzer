@@ -1,4 +1,4 @@
-// Aegis AI - Backend API Server (Sprint 1)
+// कVaच (Kavach) - Backend API Server (Sprint 1)
 // Implements: Authentication API, Project API, Repository API
 // Supports both /api/* and root /* route paths for universal test runner compatibility.
 

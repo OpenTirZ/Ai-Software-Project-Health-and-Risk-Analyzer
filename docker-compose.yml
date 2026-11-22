@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: project-health-backend:latest
-    container_name: ai_health_backend
+    image: kavach-backend:latest
+    container_name: kavach_backend
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -14,8 +14,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/project_health}
-      - MONGO_DATABASE=${MONGO_DATABASE:-project_health}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/kavach_db}
+      - MONGO_DATABASE=${MONGO_DATABASE:-kavach_db}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-insecure_default_secret_key_change_in_production_32chars}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
@@ -36,8 +36,8 @@ services:
     build:
       context: ./Frontend
       dockerfile: Dockerfile
-    image: project-health-frontend:latest
-    container_name: ai_health_frontend
+    image: kavach-frontend:latest
+    container_name: kavach_frontend
     restart: unless-stopped
     ports:
       - "3000:80"
@@ -48,7 +48,7 @@ services:
 
   mongodb:
     image: mongo:7.0
-    container_name: ai_health_mongo
+    container_name: kavach_mongo
     restart: unless-stopped
     ports:
       - "27017:27017"
@@ -59,7 +59,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: project-health-backend:latest
+    image: kavach-backend:latest
     container_name: kavach_report_worker
     restart: unless-stopped
     command: ["python", "-m", "Backend.reporting.scheduler"]
@@ -69,8 +69,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/project_health}
-      - MONGO_DATABASE=${MONGO_DATABASE:-project_health}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/kavach_db}
+      - MONGO_DATABASE=${MONGO_DATABASE:-kavach_db}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - SCHEDULER_POLL_INTERVAL=60
     depends_on:

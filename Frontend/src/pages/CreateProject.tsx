@@ -147,7 +147,6 @@ export const CreateProject: React.FC<CreateProjectProps> = ({
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Define your project metadata to initialize कVaच's health analytics and sprint risk tracking.
           </p>
-          </p>
         </div>
 
         {apiError && (

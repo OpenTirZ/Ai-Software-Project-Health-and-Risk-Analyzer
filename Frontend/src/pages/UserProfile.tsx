@@ -52,7 +52,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [profile, setProfile] = useState<UserProfileData>(() => ({
     fullName: currentUser?.fullName || 'John Developer',
     username: currentUser?.username || '@johndev',
-    email: currentUser?.email || 'john.dev@aegis-health.io',
+    email: currentUser?.email || 'john.dev@kavach.ai',
     role: currentUser?.role || 'Lead Staff Architect',
     team: currentUser?.team || 'Enterprise Core Platform',
     bio:

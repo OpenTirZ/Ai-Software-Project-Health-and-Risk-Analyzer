@@ -153,8 +153,6 @@ export const SignUp: React.FC<SignUpProps> = ({
             </p>
           </div>
         </div>
-          </div>
-        </div>
 
         <div className="my-10 max-w-lg md:my-0">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#9ED4C8]">
