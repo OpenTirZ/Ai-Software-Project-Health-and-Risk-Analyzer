@@ -109,7 +109,7 @@ export const CreateProject: React.FC<CreateProjectProps> = ({ onProjectCreated, 
             Create New Project
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Define your project metadata to initialize Aegis AI's health analytics and sprint risk tracking.
+            Define your project metadata to initialize कVaच's health analytics and sprint risk tracking.
           </p>
         </div>
 

@@ -79,16 +79,19 @@ export const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess, initia
 
         {/* Top Branding (Logo + Bigger Title) */}
         <div className="relative z-10 flex items-center gap-3.5">
-          <div className="w-11 h-11 md:w-12 md:h-12 rounded-[12px] overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 shrink-0 shadow-md p-1.5 flex items-center justify-center">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-[14px] overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 shrink-0 shadow-md p-1.5 flex items-center justify-center">
             <img 
-              src="/assets/website-logo.png" 
-              alt="Website Logo" 
+              src="/assets/kavach-logo.png" 
+              alt="कVaच Logo" 
               className="w-full h-full object-contain"
             />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl md:text-[26px] lg:text-[28px] font-extrabold font-['Saira_Semi_Condensed',sans-serif] text-white leading-[1.1] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-              AI Software Project Health and<br className="hidden sm:inline" /> Risk Analyzer
+            <div className="text-2xl sm:text-3xl font-black text-white leading-none tracking-tight flex items-center gap-0.5 mb-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              <span>क</span><span className="text-[#e11d48]">Va</span><span>च</span>
+            </div>
+            <h1 className="text-xs sm:text-sm md:text-[15px] font-medium font-['Saira_Semi_Condensed',sans-serif] text-emerald-300 leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              See the Risks. Strengthen the Project.
             </h1>
           </div>
         </div>

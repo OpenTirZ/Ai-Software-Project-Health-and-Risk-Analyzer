@@ -378,7 +378,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {/* Logout Section */}
           <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
             <span className="text-xs text-slate-400">
-              Session authenticated via Aegis AI Security Layer
+              Session authenticated via कVaच Security Layer
             </span>
             <button
               onClick={onLogout}
@@ -470,7 +470,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Choose which events Aegis AI should remember as your alert preferences. Delivery channels (email, Slack) are configured separately and must be enabled in your organization settings.
+              Choose which events कVaच should remember as your alert preferences. Delivery channels (email, Slack) are configured separately and must be enabled in your organization settings.
             </p>
           </div>
 

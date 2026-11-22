@@ -54,15 +54,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
         className="px-5 py-5 border-b border-slate-800/80 cursor-pointer hover:opacity-95 transition-opacity"
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <ShieldCheck className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/10 border border-white/20 shrink-0 p-1 flex items-center justify-center shadow-md">
+            <img 
+              src="/assets/kavach-logo.png" 
+              alt="कVaच Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
-            <h1 className="text-[17px] font-bold text-white tracking-tight leading-tight">
-              Aegis AI
+            <h1 className="text-[19px] font-black tracking-tight leading-tight flex items-center">
+              <span className="text-white">क</span>
+              <span className="text-[#e11d48]">Va</span>
+              <span className="text-white">च</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium tracking-tight">
-              AI Software Project Health &amp; Risk Analyzer
+            <p className="text-[9.5px] text-emerald-400/90 font-medium tracking-tight">
+              See the Risks. Strengthen the Project.
             </p>
           </div>
         </div>
