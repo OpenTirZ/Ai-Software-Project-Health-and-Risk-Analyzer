@@ -28,7 +28,13 @@ from Backend.database import (
     milestones_collection,
     pull_requests_collection,
 )
-from Backend.persistence import DatabaseError, serialize_document, to_object_id
+from Backend.persistence import (
+    DatabaseError,
+    _check_project_writable,
+    _reconcile_write,
+    serialize_document,
+    to_object_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +54,8 @@ def upsert_pull_request(
     if "number" not in pr_data and "pr_number" not in pr_data:
         raise ValueError("Pull request data must contain a 'number' or 'pr_number' field.")
 
+    _check_project_writable(project_id)
+
     pr_number = int(pr_data.get("number") or pr_data.get("pr_number"))
     project_oid = to_object_id(project_id)
 
@@ -55,6 +63,8 @@ def upsert_pull_request(
         "projectId": project_oid,
         "number": pr_number,
     }
+
+    existing_doc = pull_requests_collection.find_one(filter_query)
 
     update_fields = {
         "projectId": project_oid,
@@ -84,6 +94,7 @@ def upsert_pull_request(
             {"$set": update_fields},
             upsert=True,
         )
+        _reconcile_write(pull_requests_collection, filter_query, existing_doc, result.upserted_id, project_id)
         if result.upserted_id:
             return str(result.upserted_id)
 
@@ -147,6 +158,8 @@ def upsert_issue(
     if "number" not in issue_data and "issue_number" not in issue_data:
         raise ValueError("Issue data must contain a 'number' or 'issue_number' field.")
 
+    _check_project_writable(project_id)
+
     issue_number = int(issue_data.get("number") or issue_data.get("issue_number"))
     project_oid = to_object_id(project_id)
 
@@ -154,6 +167,8 @@ def upsert_issue(
         "projectId": project_oid,
         "number": issue_number,
     }
+
+    existing_doc = issues_collection.find_one(filter_query)
 
     update_fields = {
         "projectId": project_oid,
@@ -177,6 +192,7 @@ def upsert_issue(
             {"$set": update_fields},
             upsert=True,
         )
+        _reconcile_write(issues_collection, filter_query, existing_doc, result.upserted_id, project_id)
         if result.upserted_id:
             return str(result.upserted_id)
 
@@ -241,6 +257,8 @@ def upsert_milestone(
     if raw_id is None:
         raise ValueError("Milestone data must contain 'milestone_id', 'id', or 'number'.")
 
+    _check_project_writable(project_id)
+
     milestone_id_val = str(raw_id)
     project_oid = to_object_id(project_id)
 
@@ -248,6 +266,8 @@ def upsert_milestone(
         "projectId": project_oid,
         "milestone_id": milestone_id_val,
     }
+
+    existing_doc = milestones_collection.find_one(filter_query)
 
     update_fields = {
         "projectId": project_oid,
@@ -268,6 +288,7 @@ def upsert_milestone(
             {"$set": update_fields},
             upsert=True,
         )
+        _reconcile_write(milestones_collection, filter_query, existing_doc, result.upserted_id, project_id)
         if result.upserted_id:
             return str(result.upserted_id)
 

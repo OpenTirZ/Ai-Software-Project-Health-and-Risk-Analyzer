@@ -91,7 +91,12 @@ def _require_project_member(project_id: str, current_user: dict) -> dict:
 
     project = get_project(project_id)
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(status_code=404, detail="Project not found.")
 
     if not _is_project_member(project, user_id):
@@ -191,7 +196,12 @@ def generate_project_report(
         require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Report generation is disabled.",
+        )
     try:
         generated = _generate_and_persist_report(project_id)
     except DatabaseError:
@@ -258,7 +268,12 @@ def create_schedule(
     payload: ReportScheduleCreate,
     current_user: dict = Depends(require_role(Role.ADMIN, Role.PROJECT_MANAGER)),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule creation is disabled.",
+        )
     try:
         schedule_id = create_report_schedule(
             project_id,
@@ -296,7 +311,12 @@ def update_schedule(
     payload: ReportScheduleUpdate,
     current_user: dict = Depends(require_role(Role.ADMIN, Role.PROJECT_MANAGER)),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule updates are disabled.",
+        )
     try:
         schedule = get_schedule(schedule_id)
         if not schedule or str(schedule.get("projectId")) != str(project_id):
@@ -325,7 +345,12 @@ def delete_schedule(
     schedule_id: str,
     current_user: dict = Depends(require_role(Role.ADMIN, Role.PROJECT_MANAGER)),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule deletion is disabled.",
+        )
     schedule = get_schedule(schedule_id)
     if not schedule or str(schedule.get("projectId")) != str(project_id):
         raise HTTPException(status_code=404, detail="Schedule not found for this project.")
@@ -344,7 +369,12 @@ def run_schedule(
         require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule execution is disabled.",
+        )
     schedule = get_schedule(schedule_id)
     if not schedule or str(schedule.get("projectId")) != str(project_id):
         raise HTTPException(status_code=404, detail="Schedule not found for this project.")

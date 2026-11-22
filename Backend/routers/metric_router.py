@@ -173,7 +173,12 @@ def _fetch_project_data(project_id: str, current_user: dict) -> tuple[dict, list
             detail="Database service unavailable.",
         )
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",

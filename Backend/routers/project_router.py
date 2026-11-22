@@ -165,6 +165,9 @@ def list_projects_endpoint(
         ProjectResponse.from_doc(p)
         for p in projects
         if _is_project_member(p, user_id)
+        and p.get("status") != "deleted"
+        and p.get("is_active") is not False
+        and p.get("deletion_status") not in ("pending", "completed")
     ]
     return user_projects
 
@@ -190,7 +193,12 @@ def get_project_endpoint(
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
@@ -229,10 +237,21 @@ def update_project_endpoint(
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
+        )
+
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is archived and read-only. Configuration updates are disabled.",
         )
 
     if (

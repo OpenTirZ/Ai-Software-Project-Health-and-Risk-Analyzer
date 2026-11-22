@@ -141,7 +141,7 @@ def _require_project_member(
 
     project = get_project(project_id)
 
-    if not project:
+    if not project or project.get("status") == "deleted" or project.get("is_active") is False or project.get("deletion_status") in ("pending", "completed"):
         raise HTTPException(
             status_code=404,
             detail="Project not found.",
@@ -153,6 +153,20 @@ def _require_project_member(
             detail="Access denied. You are not a member of this project.",
         )
 
+    return project
+
+
+def _require_active_project_for_sync(
+    project_id: str,
+    current_user: dict,
+) -> dict:
+    """Require an active project for data synchronization (rejects archived/deleted projects)."""
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Data synchronization is disabled.",
+        )
     return project
 
 
@@ -243,7 +257,7 @@ def sync_contributors(
 
     Requires authentication and verified project membership.
     """
-    _require_project_member(project_id, current_user)
+    _require_active_project_for_sync(project_id, current_user)
 
     try:
         return sync_project_contributors(
@@ -289,7 +303,7 @@ def sync_commits(
 
     Requires authentication and verified project membership.
     """
-    _require_project_member(project_id, current_user)
+    _require_active_project_for_sync(project_id, current_user)
 
     try:
         return sync_project_commits(
@@ -361,7 +375,7 @@ def sync_issues(
     used unless a matching repo_url is supplied.
     """
     _parse_object_id(project_id)
-    _require_project_member(project_id, current_user)
+    _require_active_project_for_sync(project_id, current_user)
 
     try:
         return sync_project_issues(
@@ -465,7 +479,7 @@ def sync_prs(
     used unless a matching repo_url is supplied.
     """
     _parse_object_id(project_id)
-    _require_project_member(project_id, current_user)
+    _require_active_project_for_sync(project_id, current_user)
 
     try:
         return sync_project_prs(
@@ -562,7 +576,7 @@ def sync_milestones(
     status "no_milestones" and message "Insufficient milestone data".
     """
     _parse_object_id(project_id)
-    _require_project_member(project_id, current_user)
+    _require_active_project_for_sync(project_id, current_user)
 
     try:
         return sync_project_milestones(
