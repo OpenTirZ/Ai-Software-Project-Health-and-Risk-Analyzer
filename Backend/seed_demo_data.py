@@ -34,11 +34,14 @@ def seed_demo_project():
     now = datetime.now(timezone.utc)
 
     # 1. Ensure a demo user exists
-    demo_user = users_collection.find_one({"email": "demo@kavach.ai"})
+    demo_user = users_collection.find_one(
+        {"$or": [{"email_normalized": "demo@kavach.ai"}, {"email": "demo@kavach.ai"}]}
+    )
     if not demo_user:
         user_res = users_collection.insert_one({
             "name": "Demo Admin",
             "email": "demo@kavach.ai",
+            "email_normalized": "demo@kavach.ai",
             "role": "admin",
             "password_hash": "$2b$12$eXampleHashedPasswordForDemoOnlySeed1234567890",
             "created_at": now - timedelta(days=90),

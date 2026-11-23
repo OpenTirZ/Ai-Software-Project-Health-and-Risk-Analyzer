@@ -49,6 +49,13 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-ci-only-32ch!")
 _mock_client = MagicMock()
 _mock_client.admin.command.return_value = {"ok": 1}  # Simulate successful ping
 _mock_db = MagicMock()
+_mock_users_collection = MagicMock()
+_mock_users_collection.list_indexes.return_value = [
+    {"name": "_id_", "key": {"_id": 1}},
+    {"name": "uniq_users_email_normalized", "key": {"email_normalized": 1}, "unique": True},
+]
+_collections = {"users": _mock_users_collection}
+_mock_db.__getitem__.side_effect = lambda coll_name: _collections.setdefault(coll_name, MagicMock())
 _mock_client.__getitem__.return_value = _mock_db
 
 _mongo_patcher = patch("pymongo.MongoClient", return_value=_mock_client)
