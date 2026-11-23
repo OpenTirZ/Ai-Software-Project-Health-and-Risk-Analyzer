@@ -6,10 +6,11 @@ from pymongo import UpdateOne
 from pymongo.errors import (
     BulkWriteError,
     ConnectionFailure,
+    DuplicateKeyError,
     PyMongoError,
     ServerSelectionTimeoutError,
 )
-from Backend.auth.normalization import normalize_email
+from Backend.auth.normalization import canonicalize_email, normalize_email
 from Backend.database import (
     users_collection,
     projects_collection,
@@ -39,6 +40,37 @@ logger = logging.getLogger(__name__)
 class DatabaseError(Exception):
     """Raised when a database operation fails due to a connectivity or driver error."""
     pass
+
+
+class DuplicateEmailError(Exception):
+    """Raised when user creation fails due to a duplicate unique email constraint."""
+    def __init__(self, email: str, message: str = "An account with this email already exists."):
+        self.email = email
+        self.message = message
+        super().__init__(self.message)
+
+
+def _is_email_duplicate_error(exc: DuplicateKeyError) -> bool:
+    """
+    Determine with high precision whether a DuplicateKeyError originated
+    specifically from the unique index on users.email_normalized.
+    """
+    details = getattr(exc, "details", None)
+    if isinstance(details, dict):
+        # 1. Exact keyPattern match (highest fidelity)
+        if details.get("keyPattern") == {"email_normalized": 1}:
+            return True
+
+        # 2. Exact index name match in driver error message
+        errmsg = details.get("errmsg", "") or details.get("err", "")
+        if re.search(r"index:\s+uniq_users_email_normalized\b", errmsg):
+            return True
+
+    # 3. Fallback: exact index name in string representation
+    if re.search(r"index:\s+uniq_users_email_normalized\b", str(exc)):
+        return True
+
+    return False
 
 
 # --------------------------------------------------
@@ -133,9 +165,25 @@ def serialize_document(document):
 # --------------------------------------------------
 
 def create_user(user_data):
+    if not user_data or not user_data.get("email"):
+        raise ValueError("User email is required.")
+
+    canonical_email = canonicalize_email(user_data.get("email"))
+    if not canonical_email:
+        raise ValueError("User email must not be empty after normalization.")
+
+    doc = dict(user_data)
+    doc["email_normalized"] = canonical_email
+
     try:
-        result = users_collection.insert_one(user_data)
+        result = users_collection.insert_one(doc)
         return str(result.inserted_id)
+    except DuplicateKeyError as exc:
+        if _is_email_duplicate_error(exc):
+            logger.warning("Duplicate email constraint violation detected during create_user on uniq_users_email_normalized.")
+            raise DuplicateEmailError(doc.get("email", "")) from exc
+        logger.error("Unrelated duplicate key error during create_user: %s", exc)
+        raise DatabaseError("A database error occurred while creating the user.") from exc
     except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
         logger.error("Database unreachable during create_user: %s", exc)
         raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
@@ -161,11 +209,28 @@ def get_user(user_id):
 def get_user_by_email(email):
     if not email:
         return None
-    normalized_email = normalize_email(email)
-    if not normalized_email:
-        return None
     try:
-        # Case-insensitive regex query for email search with literal regex escaping
+        normalized_email = canonicalize_email(email)
+        try:
+            # Primary lookup using indexed canonical field
+            document = users_collection.find_one({"email_normalized": normalized_email})
+            if document:
+                return serialize_document(document)
+        except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+            logger.error("Database unreachable during get_user_by_email: %s", exc)
+            raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+        except PyMongoError as exc:
+            logger.error("Database error during get_user_by_email: %s", exc)
+            raise DatabaseError("A database error occurred while looking up the user.") from exc
+    except ValueError:
+        # Email format is not canonicalizable via EmailStr; fallback to raw normalize_email
+        # so unmigrated legacy documents with non-standard characters remain accessible
+        normalized_email = normalize_email(email)
+        if not normalized_email:
+            return None
+
+    # Fallback to case-insensitive regex for unmigrated legacy documents
+    try:
         escaped_email = re.escape(normalized_email)
         document = users_collection.find_one(
             {"email": {"$regex": f"^\\s*{escaped_email}\\s*$", "$options": "i"}}

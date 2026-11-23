@@ -28,6 +28,11 @@ SUMMARY = "The review queue contains one aging pull request."
 @pytest.fixture
 def client(monkeypatch):
     db = mongomock.MongoClient().lifecycle
+    db.users.create_index(
+        [("email_normalized", 1)],
+        unique=True,
+        name="uniq_users_email_normalized",
+    )
     # Each DAO imports collection references. Bind them to the same test DB so
     # later HTTP requests only see records actually written by earlier ones.
     for attr in vars(database):
