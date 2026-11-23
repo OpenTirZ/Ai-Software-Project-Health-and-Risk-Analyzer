@@ -80,11 +80,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-label="Go to project overview"
         className="flex w-full items-center gap-3 border-b border-white/15 px-5 py-5 text-left"
       >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1 shadow-lg shadow-black/30">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1 shadow-lg shadow-black/30">
           <img 
             src="/assets/kavach-logo.png" 
             alt="कVaच Logo" 
-            className="w-full h-full object-contain"
+            className="w-full h-full object-contain filter drop-shadow-md"
           />
         </div>
 
