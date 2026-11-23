@@ -92,3 +92,34 @@ def test_stale_issues_ignore_malformed_records_when_valid_issues_exist():
 
     assert result["details"]["open_issues_count"] == 1
     assert result["details"]["stale_issues_count"] == 1
+
+
+def test_workload_groups_commits_by_stable_github_login():
+    from Backend.analysis.health_summary import compute_workload_indicator
+
+    result = compute_workload_indicator(
+        commits=[
+            {"author": {"login": "alice", "name": "Alice Smith"}},
+            {"author": {"login": "alice", "name": "Alice Patel"}},
+            {"author": {"login": "bob", "name": "Bob"}},
+        ]
+    )
+
+    assert result["details"]["total_contributors"] == 2
+    assert result["details"]["top_contributor"] == "alice"
+    assert result["details"]["top_contributor_share"] == 0.667
+
+
+def test_workload_groups_string_authors_case_insensitively():
+    from Backend.analysis.health_summary import compute_workload_indicator
+
+    result = compute_workload_indicator(
+        commits=[
+            {"author": "Alice"},
+            {"author": "alice"},
+            {"author": "Bob"},
+        ]
+    )
+
+    assert result["details"]["total_contributors"] == 2
+    assert result["details"]["top_contributor"] == "Alice"

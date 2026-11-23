@@ -222,29 +222,64 @@ def compute_workload_indicator(
             "flags": [],
         }
 
-    # Aggregate contributions by author/username
+    # Aggregate by stable GitHub identity where available. Display names can
+    # vary between commits, while a login consistently identifies the account.
     contribution_counts: Dict[str, int] = {}
+    contributor_labels: Dict[str, str] = {}
+
+    def add_contribution(identity: Any, display_name: Any = None, count: int = 1) -> None:
+        if not isinstance(identity, str) or not identity.strip():
+            identity = "Unknown"
+        clean_identity = identity.strip()
+        normalized_identity = clean_identity.casefold()
+        if normalized_identity not in contributor_labels:
+            label = display_name if isinstance(display_name, str) and display_name.strip() else clean_identity
+            contributor_labels[normalized_identity] = label.strip()
+        contribution_counts[normalized_identity] = (
+            contribution_counts.get(normalized_identity, 0) + count
+        )
 
     if commits:
-        for c in commits:
-            author = c.get("author")
+        for commit in commits:
+            if not isinstance(commit, dict):
+                continue
+            author = commit.get("author")
+            github_username = commit.get("github_username")
             if isinstance(author, dict):
-                author_key = (
-                    author.get("name")
+                identity = (
+                    github_username
                     or author.get("login")
+                    or author.get("name")
                     or author.get("email")
-                    or c.get("author_name")
+                    or commit.get("author_name")
                     or "Unknown"
                 )
+                display_name = author.get("login") or author.get("name") or identity
+            elif isinstance(github_username, str) and github_username.strip():
+                identity = github_username
+                display_name = github_username
             elif isinstance(author, str) and author.strip():
-                author_key = author.strip()
+                identity = author
+                display_name = author
             else:
-                author_key = c.get("author_name") or "Unknown"
-            contribution_counts[author_key] = contribution_counts.get(author_key, 0) + 1
+                identity = commit.get("author_name") or "Unknown"
+                display_name = identity
+            add_contribution(identity, display_name)
     elif contributors:
-        for contrib in contributors:
-            name = contrib.get("github_username") or contrib.get("name") or "Unknown"
-            contribution_counts[name] = contrib.get("contributions", 1)
+        for contributor in contributors:
+            if not isinstance(contributor, dict):
+                continue
+            identity = (
+                contributor.get("github_username")
+                or contributor.get("login")
+                or contributor.get("name")
+                or "Unknown"
+            )
+            add_contribution(
+                identity,
+                contributor.get("name") or identity,
+                contributor.get("contributions", 1),
+            )
 
     total_activity = sum(contribution_counts.values())
     active_contributors_count = len(contribution_counts)
@@ -263,9 +298,11 @@ def compute_workload_indicator(
         }
 
     sorted_contributors = sorted(
-        contribution_counts.items(), key=lambda x: x[1], reverse=True
+        contribution_counts.items(),
+        key=lambda item: (-item[1], contributor_labels[item[0]].casefold()),
     )
-    top_contributor, top_count = sorted_contributors[0]
+    top_identity, top_count = sorted_contributors[0]
+    top_contributor = contributor_labels[top_identity]
     top_share = round(top_count / total_activity, 3)
 
     flags = []
