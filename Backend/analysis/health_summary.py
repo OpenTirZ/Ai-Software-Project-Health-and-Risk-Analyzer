@@ -46,13 +46,16 @@ STATUS_INSUFFICIENT = "Insufficient Data"
 def _parse_datetime(val: Any) -> Optional[datetime]:
     """Parse various datetime representations into a timezone-aware UTC datetime."""
     if isinstance(val, datetime):
-        return val if val.tzinfo is not None else val.replace(tzinfo=timezone.utc)
+        dt = val if val.tzinfo is not None else val.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
     if isinstance(val, str):
         try:
             cleaned = val.replace("Z", "+00:00")
             dt = datetime.fromisoformat(cleaned)
-            return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-        except Exception:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except (ValueError, TypeError):
             return None
     return None
 
@@ -83,7 +86,7 @@ def compute_bottlenecks_indicator(
     """
     t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     aging_limit_hours = float(t.get("aging_pr_hours", 48.0))
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
 
     if pull_requests is None:
         return {
@@ -336,7 +339,7 @@ def compute_stale_issues_indicator(
     """
     t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     stale_limit_days = int(t.get("stale_issue_days", 14))
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
 
     if issues is None:
         return {
@@ -450,7 +453,7 @@ def compute_schedule_risk_indicator(
     Gracefully handles 'Insufficient Data' states when milestone or sprint
     tracking is not configured or data is missing.
     """
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
     sprints_list = sprints or []
     milestones_list = milestones or []
 
@@ -645,7 +648,7 @@ def build_health_summary(
     Construct high-level health summary response for a project.
     Matches GET /api/projects/{id}/health-summary specification.
     """
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
 
     # Extract project settings thresholds if available
     merged_thresholds = {
