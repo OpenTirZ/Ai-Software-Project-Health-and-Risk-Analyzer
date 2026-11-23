@@ -88,7 +88,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     );
 
     try {
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         dataSyncApi.syncCommits(
           project.id,
           project.default_branch || 'main'
@@ -99,7 +99,20 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
         dataSyncApi.syncMilestones(project.id),
       ]);
 
-      setSyncFeedback('Synchronization complete! Refreshing metrics...');
+      const serviceNames = ['Commits', 'PRs', 'Issues', 'Contributors', 'Milestones'];
+      const failedServices = results
+        .map((res, idx) => (res.status === 'rejected' ? serviceNames[idx] : null))
+        .filter((name): name is string => name !== null);
+
+      if (failedServices.length === 0) {
+        setSyncFeedback('Synchronization complete! Refreshing metrics...');
+      } else if (failedServices.length === serviceNames.length) {
+        setSyncFeedback('Synchronization failed across all telemetry services.');
+      } else {
+        setSyncFeedback(
+          `Sync completed with warnings: ${failedServices.join(', ')} failed to sync.`
+        );
+      }
       await fetchMetrics(project.id);
 
       if (onRefreshProject) {
