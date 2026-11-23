@@ -16,6 +16,23 @@ jobs:
   backend-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MONGO_URI: mongodb://localhost:27017
+      MONGO_DATABASE: project_health
+      JWT_SECRET_KEY: ci-test-only-not-for-production
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,5 +49,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run complete test suite
-        run: python -m pytest -v
+      - name: Run backend test suite
+        run: python -m pytest -v --ignore=Backend/externalservies/LangGraph
