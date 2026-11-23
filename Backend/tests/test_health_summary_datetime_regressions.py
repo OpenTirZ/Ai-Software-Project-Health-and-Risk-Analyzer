@@ -129,6 +129,7 @@ def test_workload_ignores_invalid_contributor_counts():
     from Backend.analysis.health_summary import compute_workload_indicator
 
     result = compute_workload_indicator(
+        commits=None,
         contributors=[
             {"github_username": "alice", "contributions": 5},
             {"github_username": "bob", "contributions": -3},
