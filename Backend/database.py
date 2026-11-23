@@ -207,7 +207,17 @@ def ensure_indexes():
             [("projectId", 1), ("status", 1), ("flagId", 1)],
             background=True,
         )
-        logger.info("Database indexes ensured.")
+        # Audit logs: compound index (timestamp: -1, resourceType: 1) for fast chronological/resource filtering.
+        audit_logs_collection.create_index(
+            [("timestamp", -1), ("resourceType", 1)],
+            background=True,
+        )
+        # Audit logs: TTL index for 90-day retention policy compliance (90 days = 7,776,000 seconds).
+        audit_logs_collection.create_index(
+            [("timestamp", 1)],
+            expireAfterSeconds=90 * 24 * 60 * 60,
+            background=True,
+        )
     except Exception as exc:  # pragma: no cover
         # Non-fatal: general indexes may already exist or be created on the next startup.
         logger.warning("Could not ensure general database indexes: %s", exc)
