@@ -354,6 +354,7 @@ def get_issues(
     # response_model guarantees only the documented fields are returned.
 
 
+
 @router.post(
     "/{project_id}/sync-issues",
     response_model=SyncIssuesResponse,
@@ -367,12 +368,12 @@ def sync_issues(
     ),
 ):
     """
-    Fetch all open and closed issues (not pull requests) from GitHub and
-    store them with one batch upsert.
+    Fetch all open and closed issues (not pull requests) from GitHub
+    and store them with one batch upsert.
 
     Requires an admin or project-manager role and project membership.
-    The request body is optional; the project's configured repository is
-    used unless a matching repo_url is supplied.
+    The request body is optional; the project's configured repository
+    is used unless a matching repo_url is supplied.
     """
     _parse_object_id(project_id)
     _require_active_project_for_sync(project_id, current_user)
@@ -384,6 +385,7 @@ def sync_issues(
         )
     except Exception as exc:
         raise _map_github_errors(exc)
+
 
     # EXPLANATION (sync_issues):
     # Same security model as sync-commits: only admins/project managers who
