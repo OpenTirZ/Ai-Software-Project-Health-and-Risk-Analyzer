@@ -1,3 +1,4 @@
+
 """Regression tests for timezone normalization in health indicators."""
 
 from datetime import datetime
@@ -20,7 +21,6 @@ def test_bottlenecks_accept_naive_now_and_offset_timestamp():
     ]
 
     result = compute_bottlenecks_indicator(pull_requests, now=now)
-
     assert result["details"]["avg_pr_age_hours"] == 6.0
 
 
@@ -35,7 +35,6 @@ def test_stale_issues_accept_naive_now_and_offset_timestamp():
     ]
 
     result = compute_stale_issues_indicator(issues, now=now)
-
     assert result["details"]["stale_issues_count"] == 1
 
 
@@ -51,7 +50,6 @@ def test_schedule_risk_accepts_naive_now_with_offset_dates():
     ]
 
     result = compute_schedule_risk_indicator(milestones=milestones, now=now)
-
     assert result["details"]["overdue_count"] == 1
 
 
@@ -66,7 +64,6 @@ def test_bottlenecks_ignore_malformed_pr_records():
         pull_requests,
         now=datetime(2026, 11, 4, 12, 0, 0),
     )
-
     assert result["details"]["total_prs_tracked"] == 1
     assert result["details"]["open_prs_count"] == 1
 
@@ -76,7 +73,6 @@ def test_stale_issues_return_insufficient_for_only_malformed_records():
         [None, "not-an-issue"],
         now=datetime(2026, 11, 20, 12, 0, 0),
     )
-
     assert result["status"] == "Insufficient Data"
     assert result["data_status"] == "insufficient_data"
 
@@ -89,7 +85,6 @@ def test_stale_issues_ignore_malformed_records_when_valid_issues_exist():
         ],
         now=datetime(2026, 11, 20, 12, 0, 0),
     )
-
     assert result["details"]["open_issues_count"] == 1
     assert result["details"]["stale_issues_count"] == 1
 
@@ -136,7 +131,7 @@ def test_workload_ignores_invalid_contributor_counts():
             {"github_username": "carol", "contributions": "many"},
             {"github_username": "dave", "contributions": True},
             None,
-        ]
+        ],
     )
 
     assert result["details"]["total_contributors"] == 1
@@ -148,10 +143,11 @@ def test_workload_returns_insufficient_when_all_contributor_counts_are_invalid()
     from Backend.analysis.health_summary import compute_workload_indicator
 
     result = compute_workload_indicator(
+        commits=None,
         contributors=[
             {"github_username": "alice", "contributions": "five"},
             {"github_username": "bob", "contributions": -1},
-        ]
+        ],
     )
 
     assert result["status"] == "Insufficient Data"
