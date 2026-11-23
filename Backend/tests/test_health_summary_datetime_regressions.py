@@ -123,3 +123,34 @@ def test_workload_groups_string_authors_case_insensitively():
 
     assert result["details"]["total_contributors"] == 2
     assert result["details"]["top_contributor"] == "Alice"
+
+
+def test_workload_ignores_invalid_contributor_counts():
+    from Backend.analysis.health_summary import compute_workload_indicator
+
+    result = compute_workload_indicator(
+        contributors=[
+            {"github_username": "alice", "contributions": 5},
+            {"github_username": "bob", "contributions": -3},
+            {"github_username": "carol", "contributions": "many"},
+            {"github_username": "dave", "contributions": True},
+            None,
+        ]
+    )
+
+    assert result["details"]["total_contributors"] == 1
+    assert result["details"]["total_activity_events"] == 5
+    assert result["details"]["top_contributor"] == "alice"
+
+
+def test_workload_returns_insufficient_when_all_contributor_counts_are_invalid():
+    from Backend.analysis.health_summary import compute_workload_indicator
+
+    result = compute_workload_indicator(
+        contributors=[
+            {"github_username": "alice", "contributions": "five"},
+            {"github_username": "bob", "contributions": -1},
+        ]
+    )
+
+    assert result["status"] == "Insufficient Data"

@@ -20,6 +20,7 @@ available indicators instead of penalizing missing sources with fake zero scores
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -227,7 +228,13 @@ def compute_workload_indicator(
     contribution_counts: Dict[str, int] = {}
     contributor_labels: Dict[str, str] = {}
 
-    def add_contribution(identity: Any, display_name: Any = None, count: int = 1) -> None:
+    def add_contribution(identity: Any, display_name: Any = None, count: Any = 1) -> None:
+        # GitHub contribution counts must be non-negative integers. Ignore
+        # malformed values instead of letting them corrupt the aggregate.
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            return
+        if count == 0:
+            return
         if not isinstance(identity, str) or not identity.strip():
             identity = "Unknown"
         clean_identity = identity.strip()
