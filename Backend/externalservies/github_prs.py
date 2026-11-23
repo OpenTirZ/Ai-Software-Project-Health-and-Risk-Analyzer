@@ -266,10 +266,15 @@ def _fetch_pr_details(
             data = resp.json()
             details["additions"] = data.get("additions", 0)
             details["deletions"] = data.get("deletions", 0)
-    except requests.exceptions.RequestException:
+        elif resp.status_code in (403, 429) or "rate limit" in resp.text.lower():
+            logger.warning(
+                "Rate limit encountered while fetching PR #%s details for %s/%s; using defaults.",
+                pr_number, owner, repo,
+            )
+    except Exception as exc:
         logger.warning(
-            "Could not fetch PR #%s details for %s/%s; using defaults.",
-            pr_number, owner, repo,
+            "Could not fetch PR #%s details for %s/%s: %s; using defaults.",
+            pr_number, owner, repo, exc,
         )
 
     # Fetch reviews count
@@ -281,10 +286,15 @@ def _fetch_pr_details(
             if isinstance(reviews_data, list):
                 details["reviews_count"] = len(reviews_data)
                 details["reviews"] = reviews_data
-    except requests.exceptions.RequestException:
+        elif resp.status_code in (403, 429) or "rate limit" in resp.text.lower():
+            logger.warning(
+                "Rate limit encountered while fetching reviews for PR #%s of %s/%s; using defaults.",
+                pr_number, owner, repo,
+            )
+    except Exception as exc:
         logger.warning(
-            "Could not fetch reviews for PR #%s of %s/%s; using 0.",
-            pr_number, owner, repo,
+            "Could not fetch reviews for PR #%s of %s/%s: %s; using 0.",
+            pr_number, owner, repo, exc,
         )
 
     return details
@@ -497,7 +507,30 @@ def get_github_prs(repo_url: str) -> dict:
         if not isinstance(pr_number, int):
             continue
 
-        details = _fetch_pr_details(session, owner, repo, pr_number)
+        state = _determine_pr_state(raw)
+        # Secondary HTTP requests (/pulls/{number} and /reviews) are only issued
+        # for OPEN pull requests where active metrics (review turnaround, pending
+        # reviews, diff statistics) are required. Historical closed/merged PRs
+        # consume their basic metadata directly from the primary list payload,
+        # resolving the N+1 API timeout & rate-limit bottleneck (Issue #174).
+        if state == "open":
+            if "additions" in raw and "reviews" in raw:
+                details = {
+                    "additions": raw.get("additions", 0),
+                    "deletions": raw.get("deletions", 0),
+                    "reviews_count": raw.get("reviews_count", len(raw.get("reviews", []))),
+                    "reviews": raw.get("reviews", []),
+                }
+            else:
+                details = _fetch_pr_details(session, owner, repo, pr_number)
+        else:
+            details = {
+                "additions": raw.get("additions", 0),
+                "deletions": raw.get("deletions", 0),
+                "reviews_count": raw.get("reviews_count", 0),
+                "reviews": raw.get("reviews", []),
+            }
+
         pull_requests.append(_normalize_pr(raw, repository, details))
 
     return {
