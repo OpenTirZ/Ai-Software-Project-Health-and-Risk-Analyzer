@@ -1,12 +1,13 @@
 import React from 'react';
 import type { PageView, UserProfileData } from '../types';
 import type { ProjectResponse } from '../services/api';
+import { NotificationPanel } from './NotificationPanel';
 import {
   ChevronRight,
-  Bell,
   GitBranch,
   RefreshCw,
   Plus,
+  Menu,
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -18,6 +19,7 @@ interface TopBarProps {
   onNavigate: (view: PageView) => void;
   onSyncAll?: () => void;
   isSyncing?: boolean;
+  onOpenMenu?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -29,6 +31,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onNavigate,
   onSyncAll,
   isSyncing = false,
+  onOpenMenu,
 }) => {
   const getBreadcrumbTitle = () => {
     switch (currentView) {
@@ -80,6 +83,17 @@ export const TopBar: React.FC<TopBarProps> = ({
     <header className="relative z-10 flex h-[68px] shrink-0 items-center justify-between gap-4 topbar-accent border-b border-[#9ED4C8] bg-white px-4 sm:px-6">
 
       <div className="flex min-w-0 items-center gap-2 text-[13px]">
+
+        {onOpenMenu && (
+          <button
+            type="button"
+            onClick={onOpenMenu}
+            aria-label="Open navigation menu"
+            className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-[#CDEFE6] hover:text-[#0B6B63] lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
 
         <button
           type="button"
@@ -173,17 +187,12 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => onNavigate('profile')}
-          title="Notifications"
-          aria-label="Notifications"
-          className="relative flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-[#CDEFE6] hover:text-[#0B6B63]"
-        >
-          <Bell className="h-[17px] w-[17px]" />
-
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#CC1F2E] ring-2 ring-white" />
-        </button>
+        <NotificationPanel
+          projects={projects}
+          userKey={currentUser?.username || currentUser?.email}
+          onSelectProject={onSelectProject}
+          onNavigate={onNavigate}
+        />
 
         <button
           type="button"

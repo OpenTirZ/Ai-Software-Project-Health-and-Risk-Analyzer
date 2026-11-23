@@ -20,6 +20,7 @@ available indicators instead of penalizing missing sources with fake zero scores
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -46,13 +47,16 @@ STATUS_INSUFFICIENT = "Insufficient Data"
 def _parse_datetime(val: Any) -> Optional[datetime]:
     """Parse various datetime representations into a timezone-aware UTC datetime."""
     if isinstance(val, datetime):
-        return val if val.tzinfo is not None else val.replace(tzinfo=timezone.utc)
+        dt = val if val.tzinfo is not None else val.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
     if isinstance(val, str):
         try:
             cleaned = val.replace("Z", "+00:00")
             dt = datetime.fromisoformat(cleaned)
-            return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-        except Exception:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except (ValueError, TypeError):
             return None
     return None
 
@@ -83,7 +87,7 @@ def compute_bottlenecks_indicator(
     """
     t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     aging_limit_hours = float(t.get("aging_pr_hours", 48.0))
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
 
     if pull_requests is None:
         return {
@@ -100,21 +104,27 @@ def compute_bottlenecks_indicator(
         }
 
     # If repository has zero PRs synced
-    if len(pull_requests) == 0:
+    valid_pull_requests = [
+        pr for pr in pull_requests if isinstance(pr, dict)
+    ]
+    if not valid_pull_requests:
         return {
             "score": None,
             "status": STATUS_INSUFFICIENT,
             "data_status": "insufficient_data",
             "weight": 0.25,
             "details": {
-                "message": "Pull request synchronization has not been performed or no PRs exist.",
+                "message": "No valid pull request records are available.",
                 "open_prs_count": 0,
                 "aging_prs_count": 0,
             },
             "flags": [],
         }
 
-    open_prs = [pr for pr in pull_requests if str(pr.get("state", "")).lower() == "open"]
+    open_prs = [
+        pr for pr in valid_pull_requests
+        if str(pr.get("state", "")).lower() == "open"
+    ]
     aging_prs = []
     total_age_hours = 0.0
 
@@ -171,7 +181,7 @@ def compute_bottlenecks_indicator(
         "data_status": "available",
         "weight": 0.25,
         "details": {
-            "total_prs_tracked": len(pull_requests),
+            "total_prs_tracked": len(valid_pull_requests),
             "open_prs_count": open_count,
             "aging_prs_count": aging_count,
             "avg_pr_age_hours": avg_age,
@@ -213,29 +223,70 @@ def compute_workload_indicator(
             "flags": [],
         }
 
-    # Aggregate contributions by author/username
+    # Aggregate by stable GitHub identity where available. Display names can
+    # vary between commits, while a login consistently identifies the account.
     contribution_counts: Dict[str, int] = {}
+    contributor_labels: Dict[str, str] = {}
+
+    def add_contribution(identity: Any, display_name: Any = None, count: Any = 1) -> None:
+        # GitHub contribution counts must be non-negative integers. Ignore
+        # malformed values instead of letting them corrupt the aggregate.
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            return
+        if count == 0:
+            return
+        if not isinstance(identity, str) or not identity.strip():
+            identity = "Unknown"
+        clean_identity = identity.strip()
+        normalized_identity = clean_identity.casefold()
+        if normalized_identity not in contributor_labels:
+            label = display_name if isinstance(display_name, str) and display_name.strip() else clean_identity
+            contributor_labels[normalized_identity] = label.strip()
+        contribution_counts[normalized_identity] = (
+            contribution_counts.get(normalized_identity, 0) + count
+        )
 
     if commits:
-        for c in commits:
-            author = c.get("author")
+        for commit in commits:
+            if not isinstance(commit, dict):
+                continue
+            author = commit.get("author")
+            github_username = commit.get("github_username")
             if isinstance(author, dict):
-                author_key = (
-                    author.get("name")
+                identity = (
+                    github_username
                     or author.get("login")
+                    or author.get("name")
                     or author.get("email")
-                    or c.get("author_name")
+                    or commit.get("author_name")
                     or "Unknown"
                 )
+                display_name = author.get("login") or author.get("name") or identity
+            elif isinstance(github_username, str) and github_username.strip():
+                identity = github_username
+                display_name = github_username
             elif isinstance(author, str) and author.strip():
-                author_key = author.strip()
+                identity = author
+                display_name = author
             else:
-                author_key = c.get("author_name") or "Unknown"
-            contribution_counts[author_key] = contribution_counts.get(author_key, 0) + 1
+                identity = commit.get("author_name") or "Unknown"
+                display_name = identity
+            add_contribution(identity, display_name)
     elif contributors:
-        for contrib in contributors:
-            name = contrib.get("github_username") or contrib.get("name") or "Unknown"
-            contribution_counts[name] = contrib.get("contributions", 1)
+        for contributor in contributors:
+            if not isinstance(contributor, dict):
+                continue
+            identity = (
+                contributor.get("github_username")
+                or contributor.get("login")
+                or contributor.get("name")
+                or "Unknown"
+            )
+            add_contribution(
+                identity,
+                contributor.get("name") or identity,
+                contributor.get("contributions", 1),
+            )
 
     total_activity = sum(contribution_counts.values())
     active_contributors_count = len(contribution_counts)
@@ -254,9 +305,11 @@ def compute_workload_indicator(
         }
 
     sorted_contributors = sorted(
-        contribution_counts.items(), key=lambda x: x[1], reverse=True
+        contribution_counts.items(),
+        key=lambda item: (-item[1], contributor_labels[item[0]].casefold()),
     )
-    top_contributor, top_count = sorted_contributors[0]
+    top_identity, top_count = sorted_contributors[0]
+    top_contributor = contributor_labels[top_identity]
     top_share = round(top_count / total_activity, 3)
 
     flags = []
@@ -336,7 +389,7 @@ def compute_stale_issues_indicator(
     """
     t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     stale_limit_days = int(t.get("stale_issue_days", 14))
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
 
     if issues is None:
         return {
@@ -366,7 +419,25 @@ def compute_stale_issues_indicator(
             "flags": [],
         }
 
-    open_issues = [i for i in issues if str(i.get("state", "")).lower() == "open"]
+    valid_issues = [issue for issue in issues if isinstance(issue, dict)]
+    if not valid_issues:
+        return {
+            "score": None,
+            "status": STATUS_INSUFFICIENT,
+            "data_status": "insufficient_data",
+            "weight": 0.25,
+            "details": {
+                "message": "No valid issue records are available.",
+                "open_issues_count": 0,
+                "stale_issues_count": 0,
+            },
+            "flags": [],
+        }
+
+    open_issues = [
+        issue for issue in valid_issues
+        if str(issue.get("state", "")).lower() == "open"
+    ]
     stale_issues = []
 
     for issue in open_issues:
@@ -450,7 +521,7 @@ def compute_schedule_risk_indicator(
     Gracefully handles 'Insufficient Data' states when milestone or sprint
     tracking is not configured or data is missing.
     """
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
     sprints_list = sprints or []
     milestones_list = milestones or []
 
@@ -645,7 +716,7 @@ def build_health_summary(
     Construct high-level health summary response for a project.
     Matches GET /api/projects/{id}/health-summary specification.
     """
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _parse_datetime(now) or datetime.now(timezone.utc)
 
     # Extract project settings thresholds if available
     merged_thresholds = {

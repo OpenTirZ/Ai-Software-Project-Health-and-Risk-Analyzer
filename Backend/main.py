@@ -31,6 +31,7 @@ from Backend.auth.router import router as auth_router
 from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
 from Backend.routers.admin_router import router as admin_router
+from Backend.routers.appeal_router import router as appeal_router
 from Backend.routers.data_sync_router import router as data_sync_router
 from Backend.routers.metric_router import router as metric_router
 from Backend.routers.project_lifecycle_router import router as project_lifecycle_router
@@ -39,6 +40,7 @@ from Backend.routers.report_router import router as report_router
 from Backend.routers.repository_router import router as repository_router
 from Backend.routers.threshold_router import router as threshold_router
 from Backend.routers.webhook_router import router as webhook_router
+from Backend.audit.audit_middleware import AuditMiddleware
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +162,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuditMiddleware)
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -178,6 +181,7 @@ app.include_router(metric_router)
 app.include_router(report_router)
 app.include_router(lifecycle_router)
 app.include_router(admin_router)
+app.include_router(appeal_router)
 app.include_router(webhook_router)
 
 
