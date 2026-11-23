@@ -103,21 +103,27 @@ def compute_bottlenecks_indicator(
         }
 
     # If repository has zero PRs synced
-    if len(pull_requests) == 0:
+    valid_pull_requests = [
+        pr for pr in pull_requests if isinstance(pr, dict)
+    ]
+    if not valid_pull_requests:
         return {
             "score": None,
             "status": STATUS_INSUFFICIENT,
             "data_status": "insufficient_data",
             "weight": 0.25,
             "details": {
-                "message": "Pull request synchronization has not been performed or no PRs exist.",
+                "message": "No valid pull request records are available.",
                 "open_prs_count": 0,
                 "aging_prs_count": 0,
             },
             "flags": [],
         }
 
-    open_prs = [pr for pr in pull_requests if str(pr.get("state", "")).lower() == "open"]
+    open_prs = [
+        pr for pr in valid_pull_requests
+        if str(pr.get("state", "")).lower() == "open"
+    ]
     aging_prs = []
     total_age_hours = 0.0
 
@@ -174,7 +180,7 @@ def compute_bottlenecks_indicator(
         "data_status": "available",
         "weight": 0.25,
         "details": {
-            "total_prs_tracked": len(pull_requests),
+            "total_prs_tracked": len(valid_pull_requests),
             "open_prs_count": open_count,
             "aging_prs_count": aging_count,
             "avg_pr_age_hours": avg_age,
@@ -369,7 +375,25 @@ def compute_stale_issues_indicator(
             "flags": [],
         }
 
-    open_issues = [i for i in issues if str(i.get("state", "")).lower() == "open"]
+    valid_issues = [issue for issue in issues if isinstance(issue, dict)]
+    if not valid_issues:
+        return {
+            "score": None,
+            "status": STATUS_INSUFFICIENT,
+            "data_status": "insufficient_data",
+            "weight": 0.25,
+            "details": {
+                "message": "No valid issue records are available.",
+                "open_issues_count": 0,
+                "stale_issues_count": 0,
+            },
+            "flags": [],
+        }
+
+    open_issues = [
+        issue for issue in valid_issues
+        if str(issue.get("state", "")).lower() == "open"
+    ]
     stale_issues = []
 
     for issue in open_issues:
