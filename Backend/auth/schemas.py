@@ -21,6 +21,13 @@ class SignupRequest(BaseModel):
             return normalize_email(v)
         return v
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_no_whitespace(cls, v: str) -> str:
+        if any(c.isspace() for c in v):
+            raise ValueError("Password must not contain spaces or whitespace characters.")
+        return v
+
 
 class LoginRequest(BaseModel):
     email: EmailStr = Field(..., description="User's email address")

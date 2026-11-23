@@ -369,7 +369,13 @@ export const authApi = {
     };
   },
 
-  async _mockSignup(name: string, username: string, email: string, _password: string): Promise<AuthResponse> {
+  async _mockSignup(name: string, username: string, email: string, password: string): Promise<AuthResponse> {
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
+    }
+    if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+      throw new Error('Password must not contain spaces or whitespace characters.');
+    }
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
     let registeredUsers: Array<{ email: string; name: string; username: string }> = [];
