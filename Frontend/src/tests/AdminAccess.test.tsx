@@ -25,9 +25,14 @@ async function renderSession(role: 'developer' | 'project_manager' | 'admin') {
   });
   render(<App />);
   await screen.findByTitle('View profile (Signed-in user)');
+  // Wait for the protected route to finish session restoration and render.
+  await screen.findByRole('button', { name: 'Request admin view' });
 }
 
 beforeEach(() => {
+  // BrowserRouter reads the current browser URL when App mounts. Reset it so
+  // each test starts from the same protected entry route.
+  window.history.replaceState({}, '', '/');
   vi.stubGlobal('localStorage', jsdom.window.localStorage);
   localStorage.setItem('aegis_token', 'test-session');
   vi.spyOn(projectApi, 'getProjects').mockResolvedValue([]);
@@ -41,7 +46,7 @@ afterEach(() => {
 
 describe('admin access', () => {
   it.each(['developer', 'project_manager'] as const)(
-    'redirects a %s requesting the admin view to the project overview',
+    'redirects a %s requesting the admin view to the projects page',
     async (role) => {
       const user = userEvent.setup();
       vi.spyOn(window, 'alert').mockImplementation(() => {});
@@ -53,7 +58,7 @@ describe('admin access', () => {
 
       await user.click(screen.getByRole('button', { name: 'Request admin view' }));
 
-      expect(screen.getByRole('button', { name: 'Project Overview', current: 'page' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'All Repositories', current: 'page' })).toBeVisible();
       expect(screen.queryByRole('heading', { name: 'Admin Panel' })).toBeNull();
       expect(listUsers).not.toHaveBeenCalled();
     },
@@ -70,14 +75,17 @@ describe('admin access', () => {
     });
     render(<App />);
 
+    // Cached role data must not render the protected page while verification
+    // is pending, nor should it expose the admin navigation item.
+    expect(screen.getByRole('status')).toHaveTextContent('Verifying your session');
     expect(screen.queryByRole('button', { name: 'Admin Panel' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Request admin view' }));
-    expect(screen.getByRole('button', { name: 'Project Overview', current: 'page' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Request admin view' })).toBeNull();
     expect(listUsers).not.toHaveBeenCalled();
 
     await act(async () => finishRestore({
       id: 'viewer', name: 'Verified admin', username: 'admin', email: 'admin@example.com', role: 'admin',
     }));
+    await screen.findByRole('button', { name: 'Request admin view' });
     await user.click(screen.getByRole('button', { name: 'Admin Panel' }));
     expect(screen.getByRole('heading', { name: 'Admin Panel' })).toBeVisible();
     expect(listUsers).toHaveBeenCalled();
@@ -102,7 +110,7 @@ describe('admin access', () => {
     await screen.findByTitle('View profile (Other User)');
     expect(screen.queryByRole('button', { name: 'Admin Panel' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Request admin view' }));
-    expect(screen.getByRole('button', { name: 'Project Overview', current: 'page' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'All Repositories', current: 'page' })).toBeVisible();
   });
 
   it('shows a dismissible error toast and keeps the original role after a 403', async () => {
