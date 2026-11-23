@@ -1,0 +1,5114 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI Software Project Health & Risk Analyzer",
+    "description": "Backend API for analysing software project health and risk.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register a new user",
+        "description": "Create a new user account.\n\n- **name**: Full name of the user\n- **email**: Must be unique\n- **password**: Plain-text (hashed before storage; never stored in plain text)",
+        "operationId": "signup_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Sign in and receive a JWT token",
+        "description": "Authenticate with email + password.\n\nReturns a Bearer token on success.\nReturns **401** for invalid credentials (intentionally vague to prevent\nuser enumeration).",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Sign out (stateless)",
+        "description": "Stateless logout \u2014 the client must discard the token.\n\nFor token revocation, a server-side denylist (e.g. Redis) can be added\nlater without changing this interface.",
+        "operationId": "logout_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get the current user's profile",
+        "description": "Returns the authenticated user's profile.\n\nRequires: `Authorization: Bearer <token>` header.",
+        "operationId": "me_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/me/settings": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get the authenticated user's notification preferences",
+        "description": "Returns the current user's notification preferences.\nIf preferences have not been explicitly saved yet, returns default preferences.",
+        "operationId": "get_settings_auth_me_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Update the authenticated user's notification preferences",
+        "description": "Partially or fully update notification preferences.\nPreserves existing preference values when omitted in the request.\nValidates extra fields via extra='forbid'.",
+        "operationId": "update_settings_auth_me_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/signup": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register a new user",
+        "description": "Create a new user account.\n\n- **name**: Full name of the user\n- **email**: Must be unique\n- **password**: Plain-text (hashed before storage; never stored in plain text)",
+        "operationId": "signup_api_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Sign in and receive a JWT token",
+        "description": "Authenticate with email + password.\n\nReturns a Bearer token on success.\nReturns **401** for invalid credentials (intentionally vague to prevent\nuser enumeration).",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Sign out (stateless)",
+        "description": "Stateless logout \u2014 the client must discard the token.\n\nFor token revocation, a server-side denylist (e.g. Redis) can be added\nlater without changing this interface.",
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get the current user's profile",
+        "description": "Returns the authenticated user's profile.\n\nRequires: `Authorization: Bearer <token>` header.",
+        "operationId": "me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/me/settings": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get the authenticated user's notification preferences",
+        "description": "Returns the current user's notification preferences.\nIf preferences have not been explicitly saved yet, returns default preferences.",
+        "operationId": "get_settings_api_auth_me_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Update the authenticated user's notification preferences",
+        "description": "Partially or fully update notification preferences.\nPreserves existing preference values when omitted in the request.\nValidates extra fields via extra='forbid'.",
+        "operationId": "update_settings_api_auth_me_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "List authenticated user's projects",
+        "description": "Retrieve all projects where the authenticated user is an owner or member.\nUnowned legacy projects without verified ownership or membership are excluded.",
+        "operationId": "list_projects_endpoint_api_projects_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Projects Endpoint Api Projects Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Create a new project",
+        "description": "Create a new project. The authenticated caller becomes the project owner\nand initial member.",
+        "operationId": "create_project_endpoint_api_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/projects/{project_id}": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get project by ID",
+        "description": "Retrieve a specific project by its ID.\nThe caller must be a verified owner or member.",
+        "operationId": "get_project_endpoint_api_projects__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Update project configuration",
+        "description": "Update project details and configuration (name, description, repo_url, default_branch).\nOnly the verified project owner can update project configuration.",
+        "operationId": "update_project_endpoint_api_projects__project_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/archive": {
+      "post": {
+        "tags": [
+          "Project Lifecycle"
+        ],
+        "summary": "Archive a project (Owner or Admin only)",
+        "description": "Mark a project as archived.\nAn archived project becomes strictly read-only: data synchronization and configuration\nmutations are disabled, while existing data and historical telemetry remain readable.",
+        "operationId": "archive_project_endpoint_api_projects__id__archive_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ID of the project to archive",
+              "title": "Id"
+            },
+            "description": "ID of the project to archive"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}": {
+      "delete": {
+        "tags": [
+          "Project Lifecycle"
+        ],
+        "summary": "Soft-delete a project (Owner or Admin only)",
+        "description": "Soft-delete a project and cascade inactive status across all associated collections.\nDoes not physically delete project or telemetry documents, preserving historical audit trails.",
+        "operationId": "delete_project_endpoint_api_projects__id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ID of the project to soft-delete",
+              "title": "Id"
+            },
+            "description": "ID of the project to soft-delete"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/repositories/connect": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Connect a GitHub repository to a project",
+        "description": "Connect a GitHub repository to a project by updating its repo_url and default_branch.\nOnly the project owner or admin can connect a repository.",
+        "operationId": "connect_repository_endpoint_api_repositories_connect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRepositoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryItemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/repositories": {
+      "get": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "List all connected repositories for current user's projects",
+        "description": "List all projects that have a connected repository accessible by the current user.",
+        "operationId": "list_repositories_endpoint_api_repositories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepositoryItemResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Repositories Endpoint Api Repositories Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/repositories/branches": {
+      "get": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Fetch remote branches for a GitHub repository",
+        "description": "Query GitHub API from the backend server to discover active branches.\nUses GITHUB_TOKEN if configured in server environment to avoid rate limits.",
+        "operationId": "fetch_branches_endpoint_api_repositories_branches_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "GitHub repository URL",
+              "title": "Url"
+            },
+            "description": "GitHub repository URL"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/contributors": {
+      "get": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "List project contributors",
+        "description": "Retrieve stored contributors for a project.\n\nRequires authentication and verified project membership.",
+        "operationId": "get_contributors_api_projects__project_id__contributors_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/sync-contributors": {
+      "post": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "Sync contributors from GitHub",
+        "description": "Sync contributors from GitHub.\n\nRequires authentication and verified project membership.",
+        "operationId": "sync_contributors_api_projects__project_id__sync_contributors_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncContributorsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/commits": {
+      "get": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "List project commits",
+        "description": "Retrieve stored commits for a project.\n\nRequires authentication and verified project membership.",
+        "operationId": "get_commits_api_projects__project_id__commits_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/sync-commits": {
+      "post": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "Sync commits from GitHub",
+        "description": "Retrieve commits from GitHub and persist them.\n\nRequires authentication and verified project membership.",
+        "operationId": "sync_commits_api_projects__project_id__sync_commits_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncCommitsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/issues": {
+      "get": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "List project issues",
+        "description": "Retrieve the issues stored for a project (never calls GitHub).\n\nRequires authentication and verified project membership.",
+        "operationId": "get_issues_api_projects__project_id__issues_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(open|closed)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional filter: open or closed.",
+              "title": "State"
+            },
+            "description": "Optional filter: open or closed."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IssueResponse"
+                  },
+                  "title": "Response Get Issues Api Projects  Project Id  Issues Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/sync-issues": {
+      "post": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "Sync issues from GitHub",
+        "description": "Fetch all open and closed issues (not pull requests) from GitHub\nand store them with one batch upsert.\n\nRequires an admin or project-manager role and project membership.\nThe request body is optional; the project's configured repository\nis used unless a matching repo_url is supplied.",
+        "operationId": "sync_issues_api_projects__project_id__sync_issues_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SyncIssuesRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncIssuesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/prs": {
+      "get": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "List project pull requests",
+        "description": "Retrieve the pull requests stored for a project (never calls GitHub).\n\nRequires authentication and verified project membership.",
+        "operationId": "get_pull_requests_api_projects__project_id__prs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(open|closed|merged)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional filter: open, closed, or merged.",
+              "title": "State"
+            },
+            "description": "Optional filter: open, closed, or merged."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PRResponse"
+                  },
+                  "title": "Response Get Pull Requests Api Projects  Project Id  Prs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/sync-prs": {
+      "post": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "Sync pull requests from GitHub",
+        "description": "Fetch all open, closed, and merged pull requests from GitHub and\nstore them with upsert.\n\nRequires an admin or project-manager role and project membership.\nThe request body is optional; the project's configured repository is\nused unless a matching repo_url is supplied.",
+        "operationId": "sync_prs_api_projects__project_id__sync_prs_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SyncPRsRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncPRsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/milestones": {
+      "get": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "List project milestones",
+        "description": "Retrieve the milestones stored for a project (never calls GitHub).\n\nRequires authentication and verified project membership.",
+        "operationId": "get_milestones_api_projects__project_id__milestones_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(open|closed)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional filter: open or closed.",
+              "title": "State"
+            },
+            "description": "Optional filter: open or closed."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MilestoneResponse"
+                  },
+                  "title": "Response Get Milestones Api Projects  Project Id  Milestones Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/sync-milestones": {
+      "post": {
+        "tags": [
+          "Data Sync"
+        ],
+        "summary": "Sync milestones from GitHub",
+        "description": "Fetch all open and closed milestones from GitHub and store them\nwith upsert.\n\nRequires an admin or project-manager role and project membership.\nThe request body is optional; the project's configured repository is\nused unless a matching repo_url is supplied.\n\nProjects without milestones return a success response with\nstatus \"no_milestones\" and message \"Insufficient milestone data\".",
+        "operationId": "sync_milestones_api_projects__project_id__sync_milestones_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SyncMilestonesRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncMilestonesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/thresholds": {
+      "get": {
+        "tags": [
+          "Thresholds"
+        ],
+        "summary": "Retrieve project health & risk thresholds",
+        "description": "Retrieve configured health and risk thresholds for a project.\nIf the project has not configured custom thresholds, sensible system defaults\nare returned (e.g. stale PR > 48h, stale issue > 14 days, workload imbalance ratio > 3.0).\nRequires the caller to be a member or owner of the project (or global admin).",
+        "operationId": "get_project_thresholds_endpoint_api_projects__project_id__thresholds_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThresholdsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Thresholds"
+        ],
+        "summary": "Update project health & risk thresholds",
+        "description": "Update project health & risk thresholds.\nRestricted to project owner, admin, or lead.\nValidates input bounds and returns clear error messages on invalid values.",
+        "operationId": "update_project_thresholds_endpoint_api_projects__project_id__thresholds_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThresholdsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThresholdsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/health-summary": {
+      "get": {
+        "tags": [
+          "Project Health & Metrics"
+        ],
+        "summary": "Get project health summary",
+        "description": "Returns composite 0-100 health score, aggregated status (Good / Caution / At Risk), and active flags.",
+        "operationId": "get_health_summary_endpoint_api_projects__id__health_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target project ObjectId",
+              "title": "Id"
+            },
+            "description": "Target project ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/metrics/breakdown": {
+      "get": {
+        "tags": [
+          "Project Health & Metrics"
+        ],
+        "summary": "Get detailed metrics breakdown",
+        "description": "Returns granular indicators (bottlenecks, workload, stale issues, schedule risk) with weights and evidence, along with advisory engineering recommendations.",
+        "operationId": "get_metrics_breakdown_endpoint_api_projects__id__metrics_breakdown_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target project ObjectId",
+              "title": "Id"
+            },
+            "description": "Target project ObjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsBreakdownResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/generate": {
+      "post": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Run the LangGraph V2 analysis and persist a validated status report",
+        "operationId": "generate_project_report_api_projects__project_id__reports_generate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports": {
+      "get": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "List persisted reports",
+        "operationId": "list_project_reports_api_projects__project_id__reports_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/latest": {
+      "get": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Fetch the newest persisted report",
+        "operationId": "get_latest_report_api_projects__project_id__reports_latest_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/schedules": {
+      "post": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Create a report delivery schedule",
+        "operationId": "create_schedule_api_projects__project_id__reports_schedules_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportScheduleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "List report schedules",
+        "operationId": "list_schedules_api_projects__project_id__reports_schedules_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/schedules/{schedule_id}": {
+      "patch": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Update a schedule",
+        "operationId": "update_schedule_api_projects__project_id__reports_schedules__schedule_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportScheduleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Delete a schedule",
+        "operationId": "delete_schedule_api_projects__project_id__reports_schedules__schedule_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleSuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/schedules/{schedule_id}/run": {
+      "post": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Run a schedule now and stamp its lastRun",
+        "operationId": "run_schedule_api_projects__project_id__reports_schedules__schedule_id__run_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/{report_id}/pdf": {
+      "get": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Export a report as PDF",
+        "operationId": "export_report_pdf_api_projects__project_id__reports__report_id__pdf_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reports/{report_id}": {
+      "get": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Fetch one persisted report",
+        "operationId": "get_single_report_api_projects__project_id__reports__report_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Reports & Schedules"
+        ],
+        "summary": "Delete one persisted report",
+        "operationId": "delete_single_report_api_projects__project_id__reports__report_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleSuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}/deactivate": {
+      "post": {
+        "tags": [
+          "User Lifecycle"
+        ],
+        "summary": "Deactivate a user account (Admin only)",
+        "description": "Deactivates a user account.\nRestricted to system administrators.\nSets is_active: false in the user document, immediately invalidating any active JWT sessions.",
+        "operationId": "deactivate_user_api_users__id__deactivate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The ID of the user to deactivate",
+              "title": "Id"
+            },
+            "description": "The ID of the user to deactivate"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeactivateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "List all platform users",
+        "description": "Return a paginated list of all platform users.\nSupports full-text search over *name* and *email* fields\nand optional filtering by ``is_active``.",
+        "operationId": "list_users_api_admin_users_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search by name or email",
+              "title": "Search"
+            },
+            "description": "Search by name or email"
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by active status",
+              "title": "Is Active"
+            },
+            "description": "Filter by active status"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of records to skip",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Number of records to skip"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Max records to return",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Max records to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedUsersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/role": {
+      "patch": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "Update a user's platform role",
+        "description": "Change the role of an existing user.\n\n- Allowed values: ``admin``, ``project_manager``, ``developer``.\n- An admin **cannot** demote their own account.\n- A role-change audit record is created on success.",
+        "operationId": "update_user_role_api_admin_users__user_id__role_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/activate": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "Activate a user account",
+        "description": "Re-activate a previously deactivated user.\n\n- An admin **cannot** activate/deactivate their own account\n  (self-protection guard applies to both transitions).",
+        "operationId": "activate_user_api_admin_users__user_id__activate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/deactivate": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "Deactivate a user account",
+        "description": "Deactivate a user account.\n\n- An admin **cannot** deactivate their own account.\n- Deactivated users receive **401 Unauthorized** on every subsequent\n  authenticated request (enforced in ``get_current_user``).",
+        "operationId": "deactivate_user_api_admin_users__user_id__deactivate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/audit-logs": {
+      "get": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "Fetch recent platform audit logs",
+        "description": "Return the most recent platform audit events, newest-first.",
+        "operationId": "fetch_audit_logs_api_admin_audit_logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Max log entries to return",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Max log entries to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogOut"
+                  },
+                  "title": "Response Fetch Audit Logs Api Admin Audit Logs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/appeals": {
+      "post": {
+        "tags": [
+          "Project Appeals"
+        ],
+        "summary": "Submit an appeal against a health flag",
+        "description": "Allow a project developer to appeal a currently generated health flag.",
+        "operationId": "submit_appeal_api_projects__project_id__appeals_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppealCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppealResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Project Appeals"
+        ],
+        "summary": "List project appeals",
+        "description": "Developers see their own appeals; project managers see all project appeals.",
+        "operationId": "list_appeals_api_projects__project_id__appeals_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppealResponse"
+                  },
+                  "title": "Response List Appeals Api Projects  Project Id  Appeals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/appeals/{appeal_id}": {
+      "patch": {
+        "tags": [
+          "Project Appeals"
+        ],
+        "summary": "Approve or reject an appeal",
+        "description": "Allow a project manager (team lead) who belongs to the project to review.",
+        "operationId": "review_appeal_api_projects__project_id__appeals__appeal_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "appeal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Appeal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppealReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppealResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhooks/github": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "GitHub Webhook Listener",
+        "description": "Receives GitHub webhook events, verifies HMAC-SHA256 signature, and synchronizes data.",
+        "operationId": "github_webhook_endpoint_api_webhooks_github_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Basic liveness probe endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Basic liveness probe endpoint.",
+        "operationId": "health_check_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppealCreateRequest": {
+        "properties": {
+          "flag_id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Flag Id"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flag_id",
+          "reason"
+        ],
+        "title": "AppealCreateRequest"
+      },
+      "AppealResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "flag_id": {
+            "type": "string",
+            "title": "Flag Id"
+          },
+          "flag_type": {
+            "type": "string",
+            "title": "Flag Type"
+          },
+          "flag_message": {
+            "type": "string",
+            "title": "Flag Message"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "submitted_by": {
+            "type": "string",
+            "title": "Submitted By"
+          },
+          "submitted_at": {
+            "type": "string",
+            "title": "Submitted At"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "review_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "flag_id",
+          "flag_type",
+          "flag_message",
+          "reason",
+          "status",
+          "submitted_by",
+          "submitted_at"
+        ],
+        "title": "AppealResponse"
+      },
+      "AppealReviewRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "review_comment": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Review Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "review_comment"
+        ],
+        "title": "AppealReviewRequest"
+      },
+      "ArchiveProjectResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Confirmation message"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "ID of the archived project"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Project lifecycle status",
+            "default": "archived"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At",
+            "description": "ISO timestamp of archival"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "project_id"
+        ],
+        "title": "ArchiveProjectResponse"
+      },
+      "AuditLogOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "actor_id",
+          "created_at"
+        ],
+        "title": "AuditLogOut"
+      },
+      "BranchListResponse": {
+        "properties": {
+          "branches": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Branches"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "branches",
+          "source"
+        ],
+        "title": "BranchListResponse"
+      },
+      "ConnectRepositoryRequest": {
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "title": "Projectid",
+            "description": "Project ObjectId"
+          },
+          "githubUrl": {
+            "type": "string",
+            "title": "Githuburl",
+            "description": "Target GitHub repository URL"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch",
+            "description": "Target Git branch name",
+            "default": "main"
+          }
+        },
+        "type": "object",
+        "required": [
+          "projectId",
+          "githubUrl"
+        ],
+        "title": "ConnectRepositoryRequest"
+      },
+      "CreateProjectRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Name of the project (1\u2013200 characters)"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional project description (up to 2000 characters)"
+          },
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url",
+            "description": "Associated GitHub repository URL (e.g. https://github.com/owner/repo)"
+          },
+          "default_branch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Branch",
+            "description": "Default git branch for analysis (defaults to 'main')",
+            "default": "main"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CreateProjectRequest"
+      },
+      "DeactivateResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Status confirmation message"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "ID of the deactivated user account"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "Whether the account is active",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "user_id"
+        ],
+        "title": "DeactivateResponse"
+      },
+      "DeleteProjectResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Confirmation message"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "ID of the soft-deleted project"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Project lifecycle status",
+            "default": "deleted"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "Whether the project is active",
+            "default": false
+          },
+          "deletion_status": {
+            "type": "string",
+            "title": "Deletion Status",
+            "description": "Cascade completion status",
+            "default": "completed"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "ISO timestamp of soft deletion"
+          },
+          "cascade_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Summary",
+            "description": "Summary of cascaded collections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "project_id"
+        ],
+        "title": "DeleteProjectResponse"
+      },
+      "FlagDetailSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "severity",
+          "message"
+        ],
+        "title": "FlagDetailSchema"
+      },
+      "FlagsCountSchema": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "high": {
+            "type": "integer",
+            "title": "High",
+            "default": 0
+          },
+          "medium": {
+            "type": "integer",
+            "title": "Medium",
+            "default": 0
+          },
+          "low": {
+            "type": "integer",
+            "title": "Low",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "FlagsCountSchema"
+      },
+      "GeneratedReportResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "generated_at": {
+            "type": "string",
+            "title": "Generated At"
+          },
+          "health_score": {
+            "type": "integer",
+            "title": "Health Score"
+          },
+          "health_status": {
+            "type": "string",
+            "title": "Health Status"
+          },
+          "llm_used": {
+            "type": "boolean",
+            "title": "Llm Used"
+          },
+          "report": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Report"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "project_id",
+          "report_id",
+          "generated_at",
+          "health_score",
+          "health_status",
+          "llm_used",
+          "report"
+        ],
+        "title": "GeneratedReportResponse",
+        "description": "Response for report generation endpoints."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthSummaryResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "project_name": {
+            "type": "string",
+            "title": "Project Name"
+          },
+          "health_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score",
+            "description": "0-100 composite health score, or null if insufficient data"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Aggregated status: Good, Caution, At Risk, or Insufficient Data"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "data_freshness": {
+            "type": "string",
+            "title": "Data Freshness",
+            "description": "fresh, stale, or unknown"
+          },
+          "data_availability": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Data Availability",
+            "description": "Status per telemetry source: available or insufficient_data"
+          },
+          "summary_statement": {
+            "type": "string",
+            "title": "Summary Statement"
+          },
+          "flags_count": {
+            "$ref": "#/components/schemas/FlagsCountSchema"
+          },
+          "active_flags": {
+            "items": {
+              "$ref": "#/components/schemas/FlagDetailSchema"
+            },
+            "type": "array",
+            "title": "Active Flags"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "title": "Evaluated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "project_name",
+          "status",
+          "data_freshness",
+          "data_availability",
+          "summary_statement",
+          "flags_count",
+          "active_flags",
+          "evaluated_at"
+        ],
+        "title": "HealthSummaryResponse"
+      },
+      "IndicatorDetailSchema": {
+        "properties": {
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "data_status": {
+            "type": "string",
+            "title": "Data Status"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "flags": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "data_status",
+          "weight",
+          "details",
+          "flags"
+        ],
+        "title": "IndicatorDetailSchema"
+      },
+      "IssueResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "github_id": {
+            "type": "integer",
+            "title": "Github Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "assignees": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assignees",
+            "default": []
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Labels",
+            "default": []
+          },
+          "comments": {
+            "type": "integer",
+            "title": "Comments",
+            "default": 0
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "html_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Url"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "github_id",
+          "number",
+          "title",
+          "state"
+        ],
+        "title": "IssueResponse",
+        "description": "Public representation of one persisted GitHub issue."
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "User's email address"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password",
+            "description": "User's password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "MessageResponse"
+      },
+      "MetricsBreakdownResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "project_name": {
+            "type": "string",
+            "title": "Project Name"
+          },
+          "health_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "title": "Evaluated At"
+          },
+          "weights_used": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights Used"
+          },
+          "indicators": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/IndicatorDetailSchema"
+            },
+            "type": "object",
+            "title": "Indicators"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationSchema"
+            },
+            "type": "array",
+            "title": "Recommendations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "project_name",
+          "status",
+          "evaluated_at",
+          "weights_used",
+          "indicators"
+        ],
+        "title": "MetricsBreakdownResponse"
+      },
+      "MilestoneResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "milestone_id": {
+            "type": "string",
+            "title": "Milestone Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "open_issues": {
+            "type": "integer",
+            "title": "Open Issues",
+            "default": 0
+          },
+          "closed_issues": {
+            "type": "integer",
+            "title": "Closed Issues",
+            "default": 0
+          },
+          "completion_percentage": {
+            "type": "number",
+            "title": "Completion Percentage",
+            "default": 0.0
+          },
+          "html_url": {
+            "type": "string",
+            "title": "Html Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "milestone_id",
+          "title",
+          "state"
+        ],
+        "title": "MilestoneResponse",
+        "description": "Public representation of one persisted GitHub milestone."
+      },
+      "NotificationPreferences": {
+        "properties": {
+          "high_risk_threshold": {
+            "type": "boolean",
+            "title": "High Risk Threshold",
+            "default": true
+          },
+          "weekly_digest": {
+            "type": "boolean",
+            "title": "Weekly Digest",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "NotificationPreferences"
+      },
+      "NotificationPreferencesUpdate": {
+        "properties": {
+          "high_risk_threshold": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High Risk Threshold"
+          },
+          "weekly_digest": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "NotificationPreferencesUpdate"
+      },
+      "PRResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "merged_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged At"
+          },
+          "requested_reviewers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requested Reviewers",
+            "default": []
+          },
+          "reviews_count": {
+            "type": "integer",
+            "title": "Reviews Count",
+            "default": 0
+          },
+          "additions": {
+            "type": "integer",
+            "title": "Additions",
+            "default": 0
+          },
+          "deletions": {
+            "type": "integer",
+            "title": "Deletions",
+            "default": 0
+          },
+          "open_duration_hours": {
+            "type": "number",
+            "title": "Open Duration Hours",
+            "default": 0.0
+          },
+          "html_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "state"
+        ],
+        "title": "PRResponse",
+        "description": "Public representation of one persisted GitHub pull request."
+      },
+      "PaginatedUsersResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserAdminOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedUsersResponse"
+      },
+      "ProjectMember": {
+        "properties": {
+          "userId": {
+            "type": "string",
+            "title": "Userid",
+            "description": "User ID of the project member"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "Role of the member (e.g., 'owner', 'member')",
+            "default": "member"
+          }
+        },
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "title": "ProjectMember"
+      },
+      "ProjectResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Project document ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Project name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Project description"
+          },
+          "ownerId": {
+            "type": "string",
+            "title": "Ownerid",
+            "description": "Owner user ID"
+          },
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url",
+            "description": "Associated GitHub repository URL"
+          },
+          "default_branch": {
+            "type": "string",
+            "title": "Default Branch",
+            "description": "Default git branch",
+            "default": "main"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectMember"
+            },
+            "type": "array",
+            "title": "Members",
+            "description": "Project members"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Project status",
+            "default": "active"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat",
+            "description": "ISO timestamp of creation"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat",
+            "description": "ISO timestamp of last update"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ownerId"
+        ],
+        "title": "ProjectResponse"
+      },
+      "RecommendationSchema": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Category",
+            "description": "Category of the recommendation (e.g., 'code_review', 'workload_balance', 'milestone_pacing')."
+          },
+          "condition": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Condition",
+            "description": "The specific observed condition or bottleneck this recommendation addresses."
+          },
+          "action": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 5,
+            "title": "Action",
+            "description": "Actionable, pragmatic engineering suggestion for team leads or engineers."
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 5,
+            "title": "Rationale",
+            "description": "Why this action is suggested based on computed metrics and project health."
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ],
+            "title": "Priority",
+            "description": "Priority level: LOW, MEDIUM, or HIGH."
+          },
+          "target_role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Role",
+            "description": "Stakeholder group primarily concerned (e.g. 'Team Lead', 'Project Manager', 'Reviewer').",
+            "default": "Team Lead"
+          },
+          "is_advisory": {
+            "type": "boolean",
+            "title": "Is Advisory",
+            "description": "Affirmation that this recommendation is strictly advisory and not an automated action.",
+            "default": true
+          },
+          "disclaimer": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Disclaimer",
+            "description": "Human-in-the-loop governance disclaimer.",
+            "default": "Recommendations are advisory. Final decisions remain with the engineering team."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "condition",
+          "action",
+          "rationale",
+          "priority"
+        ],
+        "title": "RecommendationSchema",
+        "description": "Schema for actionable advisory engineering recommendations.\nEnforces the advisory disclaimer principle (system does not make automated decisions)."
+      },
+      "ReportListResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "total_reports": {
+            "type": "integer",
+            "title": "Total Reports"
+          },
+          "returned": {
+            "type": "integer",
+            "title": "Returned"
+          },
+          "reports": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Reports"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "project_id",
+          "total_reports",
+          "returned",
+          "reports"
+        ],
+        "title": "ReportListResponse",
+        "description": "Paginated list of persisted report summaries."
+      },
+      "ReportScheduleCreate": {
+        "properties": {
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "title": "Frequency",
+            "description": "How often the report is generated and delivered."
+          },
+          "destinations": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "email",
+                "slack"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Destinations",
+            "description": "Delivery channels; at least one of email or slack."
+          }
+        },
+        "type": "object",
+        "required": [
+          "frequency",
+          "destinations"
+        ],
+        "title": "ReportScheduleCreate",
+        "description": "Payload to create a report delivery schedule."
+      },
+      "ReportScheduleUpdate": {
+        "properties": {
+          "frequency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency"
+          },
+          "destinations": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "email",
+                    "slack"
+                  ]
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destinations"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused",
+                  "completed",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "ReportScheduleUpdate",
+        "description": "Payload to update an existing schedule; omitted fields stay unchanged."
+      },
+      "RepositoryItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "projectId": {
+            "type": "string",
+            "title": "Projectid"
+          },
+          "repoName": {
+            "type": "string",
+            "title": "Reponame"
+          },
+          "githubUrl": {
+            "type": "string",
+            "title": "Githuburl"
+          },
+          "branch": {
+            "type": "string",
+            "title": "Branch"
+          },
+          "connectedAt": {
+            "type": "string",
+            "title": "Connectedat"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "connected"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "projectId",
+          "repoName",
+          "githubUrl",
+          "branch",
+          "connectedAt"
+        ],
+        "title": "RepositoryItemResponse"
+      },
+      "RoleUpdateRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "New role: admin | project_manager | developer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "RoleUpdateRequest"
+      },
+      "ScheduleListResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "schedules": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Schedules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "project_id",
+          "schedules"
+        ],
+        "title": "ScheduleListResponse",
+        "description": "List of schedules configured for a project."
+      },
+      "SignupRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Full name of the user"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "User's email address"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password",
+            "description": "Password (min 8 characters)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
+        "title": "SignupRequest"
+      },
+      "SimpleSuccessResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "detail"
+        ],
+        "title": "SimpleSuccessResponse"
+      },
+      "SyncCommitsRequest": {
+        "properties": {
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "max_commits": {
+            "type": "integer",
+            "title": "Max Commits",
+            "default": 100
+          }
+        },
+        "type": "object",
+        "title": "SyncCommitsRequest"
+      },
+      "SyncContributorsRequest": {
+        "properties": {
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url"
+          }
+        },
+        "type": "object",
+        "title": "SyncContributorsRequest"
+      },
+      "SyncIssuesRequest": {
+        "properties": {
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url"
+          }
+        },
+        "type": "object",
+        "title": "SyncIssuesRequest"
+      },
+      "SyncIssuesResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "repository": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Repository"
+          },
+          "fetched_count": {
+            "type": "integer",
+            "title": "Fetched Count"
+          },
+          "pull_requests_skipped": {
+            "type": "integer",
+            "title": "Pull Requests Skipped"
+          },
+          "persisted_count": {
+            "type": "integer",
+            "title": "Persisted Count"
+          },
+          "created_count": {
+            "type": "integer",
+            "title": "Created Count"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "status",
+          "project_id",
+          "repository",
+          "fetched_count",
+          "pull_requests_skipped",
+          "persisted_count",
+          "created_count",
+          "updated_count"
+        ],
+        "title": "SyncIssuesResponse",
+        "description": "Summary returned after a successful issue synchronization."
+      },
+      "SyncMilestonesRequest": {
+        "properties": {
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url"
+          }
+        },
+        "type": "object",
+        "title": "SyncMilestonesRequest"
+      },
+      "SyncMilestonesResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "repository": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Repository"
+          },
+          "fetched_count": {
+            "type": "integer",
+            "title": "Fetched Count"
+          },
+          "created_count": {
+            "type": "integer",
+            "title": "Created Count"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "status",
+          "project_id",
+          "repository",
+          "fetched_count",
+          "created_count",
+          "updated_count"
+        ],
+        "title": "SyncMilestonesResponse",
+        "description": "Summary returned after a successful milestone synchronization."
+      },
+      "SyncPRsRequest": {
+        "properties": {
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url"
+          }
+        },
+        "type": "object",
+        "title": "SyncPRsRequest"
+      },
+      "SyncPRsResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "repository": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Repository"
+          },
+          "fetched_count": {
+            "type": "integer",
+            "title": "Fetched Count"
+          },
+          "created_count": {
+            "type": "integer",
+            "title": "Created Count"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "status",
+          "project_id",
+          "repository",
+          "fetched_count",
+          "created_count",
+          "updated_count"
+        ],
+        "title": "SyncPRsResponse",
+        "description": "Summary returned after a successful PR synchronization."
+      },
+      "ThresholdConfig": {
+        "properties": {
+          "stale_pr_hours": {
+            "type": "integer",
+            "maximum": 720.0,
+            "minimum": 1.0,
+            "title": "Stale Pr Hours",
+            "description": "Hours after which an open PR with no activity is flagged as stale (1 to 720 hours / 30 days).",
+            "default": 48
+          },
+          "stale_issue_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Stale Issue Days",
+            "description": "Days after which an open issue with no activity is flagged as stale (1 to 365 days).",
+            "default": 14
+          },
+          "workload_imbalance_ratio": {
+            "type": "number",
+            "maximum": 20.0,
+            "minimum": 1.01,
+            "title": "Workload Imbalance Ratio",
+            "description": "Ratio of highest contributor activity to team median before workload imbalance is flagged (1.01 to 20.0).",
+            "default": 3.0
+          },
+          "bus_factor_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.01,
+            "title": "Bus Factor Threshold",
+            "description": "Proportion of total commits by a single contributor that flags a bus factor risk (0.01 to 1.0, e.g. 0.60 for 60%).",
+            "default": 0.6
+          }
+        },
+        "type": "object",
+        "title": "ThresholdConfig",
+        "description": "Configuration model holding the project health & risk thresholds."
+      },
+      "ThresholdsResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "ID of the associated project."
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/ThresholdConfig",
+            "description": "Active project thresholds."
+          },
+          "is_customized": {
+            "type": "boolean",
+            "title": "Is Customized",
+            "description": "True if thresholds have been explicitly customized, False if using system defaults.",
+            "default": false
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Timestamp when thresholds were last updated (UTC)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "thresholds"
+        ],
+        "title": "ThresholdsResponse",
+        "description": "Response returned when querying or updating project thresholds."
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "user"
+        ],
+        "title": "TokenResponse"
+      },
+      "UpdateProjectRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Updated project name (1\u2013200 characters)"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Updated project description"
+          },
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url",
+            "description": "Updated associated GitHub repository URL"
+          },
+          "default_branch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Branch",
+            "description": "Updated default git branch"
+          }
+        },
+        "type": "object",
+        "title": "UpdateProjectRequest"
+      },
+      "UpdateThresholdsRequest": {
+        "properties": {
+          "stale_pr_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 720.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Pr Hours",
+            "description": "Hours after which a PR is stale (1 to 720 hours)."
+          },
+          "stale_issue_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 365.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Issue Days",
+            "description": "Days after which an issue is stale (1 to 365 days)."
+          },
+          "workload_imbalance_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 20.0,
+                "minimum": 1.01
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workload Imbalance Ratio",
+            "description": "Ratio of highest contributor activity to median (1.01 to 20.0)."
+          },
+          "bus_factor_threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bus Factor Threshold",
+            "description": "Bus factor threshold proportion (0.01 to 1.0)."
+          }
+        },
+        "type": "object",
+        "title": "UpdateThresholdsRequest",
+        "description": "Payload for updating project thresholds (PUT /api/projects/{id}/thresholds)."
+      },
+      "UserAdminOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "is_active",
+          "created_at"
+        ],
+        "title": "UserAdminOut"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "created_at"
+        ],
+        "title": "UserOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
