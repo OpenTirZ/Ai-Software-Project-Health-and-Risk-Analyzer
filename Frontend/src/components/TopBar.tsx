@@ -1,9 +1,9 @@
 import React from 'react';
 import type { PageView, UserProfileData } from '../types';
 import type { ProjectResponse } from '../services/api';
+import { NotificationPanel } from './NotificationPanel';
 import {
   ChevronRight,
-  Bell,
   GitBranch,
   RefreshCw,
   Plus,
@@ -187,17 +187,12 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => onNavigate('profile')}
-          title="Notifications"
-          aria-label="Notifications"
-          className="relative flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-[#CDEFE6] hover:text-[#0B6B63]"
-        >
-          <Bell className="h-[17px] w-[17px]" />
-
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#CC1F2E] ring-2 ring-white" />
-        </button>
+        <NotificationPanel
+          projects={projects}
+          userKey={currentUser?.username || currentUser?.email}
+          onSelectProject={onSelectProject}
+          onNavigate={onNavigate}
+        />
 
         <button
           type="button"
