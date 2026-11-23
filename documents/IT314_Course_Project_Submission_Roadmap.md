@@ -196,7 +196,7 @@ To ensure zero overlap, maximum accountability, and strong individual Git/Viva e
 | **Ramit** | **Backend Architecture & System Design Lead** | • System Design Document (Combined)<br>• Object Design Document<br>• API Reference Specification | 1. Document the multi-layer FastAPI architecture.<br>2. Write the Object Design document covering design patterns (Repository, Strategy, Pub-Sub).<br>3. Generate OpenAPI / Swagger documentation export.<br>4. Prepare Git Repository management demonstration for Viva. |
 | **Tirth Patel** | **AI Pipeline & LangGraph Analytics Lead** | • GenAI LangGraph Architecture Doc<br>• Risk & Bottleneck Engine Spec<br>• Slide S6 & S7 (Learnings & Achievements) | 1. Document LangGraph state-graph pipeline, prompt templates, and grounding validators.<br>2. Document health score mathematical formulas and bottleneck heuristic rules.<br>3. Author presentation slides on technical achievements. |
 | **Darpan** | **Frontend UI/UX & Client Architecture Lead** | • UI/UX Design & Wireframes Document<br>• Client Architecture Specification<br>• Live Demo Co-presenter | 1. Compile Figma wireframes, design system, and color token documentation (`#004643`, `#990011`, `#F0FDE5`).<br>2. Document React component hierarchy and state management.<br>3. Polish all user flows for the live 10-minute demo. |
-| **Om Patel** | **Database, Milestones & Sprint Details Lead** | • Sprint 1–4 Details Documentation<br>• MongoDB Database & Schema Design<br>• Slide S4 (Milestones) | 1. Document Sprint 1 through 4 backlogs, user stories, and velocity.<br>2. Document MongoDB schemas, indexing strategies, and collection relationships.<br>3. Author Slide S4 on milestone delivery timelines. |
+| **Om Patel** | **Database, Milestones & Sprint Details Lead** | • Sprint 1–4 Details Documentation<br>• MongoDB Database Design<br>• Slide S4 (Milestones) | 1. Document Sprint 1 through 4 backlogs, user stories, and velocity.<br>2. Document MongoDB schemas, indexing strategies, and collection relationships.<br>3. Author Slide S4 on milestone delivery timelines. |
 | **Shivani** | **UML Modeling & Architecture Diagrams Lead** | • Comprehensive UML Diagrams Document<br>• Per-Sprint Class & Sequence Diagrams | 1. Create formal Class & Sequence diagrams for Sprint 1, 2, 3, and 4.<br>2. Create system-wide Class Diagram, Activity Diagrams (AI workflow), and State Machine Diagrams (Health status).<br>3. Export all diagrams in high-resolution vector/PNG formats. |
 | **Prince Savaliya** | **QA & White-Box/Mutation Testing Lead** | • Unit Testing & Code Coverage Report<br>• Mutation Testing Report (`mutmut`)<br>• Slide S9 (Artefacts Rating) | 1. Run full `pytest --cov` and Vitest coverage to export HTML/LCOV reports.<br>2. Execute mutation testing with `mutmut` and write the mutation analysis report.<br>3. Document white-box test design methodologies. |
 | **Gaurav Rathod** | **Requirements & Traceability Lead** | • Complete Requirements Specification (FR/NFR/Use Cases)<br>• Requirements Traceability Matrix (RTM)<br>• Unimplemented Requirements Doc | 1. Consolidate and format FRs, NFRs, and detailed Use Case specifications.<br>2. Construct the end-to-end Requirements Traceability Matrix (RTM).<br>3. Write the Unimplemented Requirements & Justification document. |
@@ -205,7 +205,106 @@ To ensure zero overlap, maximum accountability, and strong individual Git/Viva e
 
 ---
 
-## 5. Master Timeline & Daily Milestones (Leading to Dec 3 Deadline)
+## 5. Master Testing Framework & Peer Cross-Testing Matrix
+
+### 5.1 Testing Strategy: Simultaneous vs. Sequential
+
+To achieve an exceptional grade in software engineering, testing cannot be haphazard. It is executed in two complementary dimensions:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        SIMULTANEOUS TESTING (Continuous in CI/CD)                       │
+│  • Developer commits code ➔ Automated PyTest & Vitest suites trigger on GitHub Actions │
+│  • Linting & static type checking (Ruff / TypeScript) executed on every PR             │
+└───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                            │
+                                            ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                       SEQUENTIAL TESTING PIPELINE (Staged Rollout)                      │
+│                                                                                        │
+│   [Stage 1: Unit & Component Testing (White-Box)]                                      │
+│   Ensures individual functions, routers, and React components execute cleanly (100% cov)│
+│                                           │                                            │
+│                                           ▼                                            │
+│   [Stage 2: Integration & Contract Testing]                                            │
+│   Verifies FastAPI endpoints ⟷ MongoDB collections ⟷ GitHub API sync                    │
+│                                           │                                            │
+│                                           ▼                                            │
+│   [Stage 3: GUI & Frontend Interaction Testing]                                        │
+│   Verifies form validation, auth redirects, responsive cards, and error state displays │
+│                                           │                                            │
+│                                           ▼                                            │
+│   [Stage 4: System & User Acceptance Testing (Black-Box)]                               │
+│   End-to-end testing of full user journeys against documented Use Cases (EP & BVA)     │
+│                                           │                                            │
+│                                           ▼                                            │
+│   [Stage 5: Non-Functional & Security Testing]                                         │
+│   API response latency (<500ms), secret-masking filter verification, RBAC penetration  │
+│                                           │                                            │
+│                                           ▼                                            │
+│   [Stage 6: Mutation Testing (Fault Injection)]                                        │
+│   Injects artificial code mutations via mutmut to measure test-suite kill rate         │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Simultaneous (Continuous during development):**
+   * Unit tests (PyTest and Vitest) run continuously on every push and pull request via GitHub Actions CI.
+   * This guarantees that new commits never break existing baseline logic.
+2. **Sequential (Staged pre-submission verification):**
+   * *Stage 1 $\rightarrow$ Stage 6* must be carried out in exact chronological order before packaging the final submission:
+     * **Do NOT run System Testing** before Unit Testing is 100% green.
+     * **Do NOT run Mutation Testing** before the full test suite has been established, or mutant generation will fail.
+     * **Do NOT run Non-Functional / Latency Testing** until the service is fully deployed to the production environment on Render.
+
+---
+
+### 5.2 Peer Cross-Testing Matrix (Independent Verification & Validation - "Who Tests Whom")
+
+Under formal Software Engineering principles (IEEE 1012 / CMMI), **developers must never exclusively test their own modules**. An independent peer tester must verify the deliverables:
+
+| Target Module & Source Code | Module Author | Designated Peer Tester(s) | Testing Type to Perform | Specific Verification Target |
+| :--- | :--- | :--- | :--- | :--- |
+| **Backend Core APIs & Authentication**<br>`Backend/auth/*`, `Backend/routers/*` | **Ramit** | **Prince Savaliya** & **Yagnik N.** | • Unit & White-Box Testing<br>• Black-Box API Boundary Testing | • JWT token issuance, refresh, and expiration.<br>• RBAC unauthorized access (403 Forbidden).<br>• Edge-case query parameters & invalid JSON payloads. |
+| **GenAI LangGraph Risk Pipeline**<br>`Backend/externalservies/LangGraph/*` | **Tirth Patel** | **Ramit** & **Prince Savaliya** | • White-Box Integration Testing<br>• Fallback & Grounding Verification | • Deterministic fallback when Gemini API key is missing.<br>• Zero hallucination of repository metrics.<br>• Extreme telemetry inputs (0 commits, 10,000 commits). |
+| **Frontend UI Dashboard & Theming**<br>`Frontend/src/pages/*`, `Frontend/src/components/*` | **Darpan** | **Yagnik N.** & **Om Patel** | • GUI / Interaction Testing<br>• Responsive & Cross-Browser Testing | • Form validation on Login, SignUp, Create Project.<br>• Responsive layout on Mobile (375px), Tablet, Desktop.<br>• Correct `#004643` & `#FF8A95` theme rendering. |
+| **Database Schemas & Sync Queries**<br>`Backend/database.py`, `Backend/persistence.py` | **Om Patel** | **Ramit** & **Shah Varshil** | • Persistence Parity Testing<br>• Index & Query Performance Testing | • Parity between `mongomock` and live MongoDB 7.0.<br>• Unique index constraints on user emails and repo URLs.<br>• Aggregation pipeline speed for project telemetry. |
+| **Docker, Multi-Stage & Cloud Deployment**<br>`Dockerfile`, `render.yaml`, `docker-compose.yml` | **Shah Varshil** | **Prince Savaliya** & **Yagnik N.** | • Deployment & Smoke Testing<br>• Environment & Port Binding Testing | • Dynamic `$PORT` binding on Render.<br>• Container restart stability (`unless-stopped`).<br>• Multi-stage image size minimization (<250MB). |
+| **Non-Functional Performance & Security**<br>Entire Deployed System | **Yagnik N.** | **Shah Varshil** & **Tirth Patel** | • Non-Functional Testing (NFR)<br>• Security & Secret Penetration | • API response latency < 500ms on Render.<br>• Log sanitization (verify tokens/keys are masked with `<REDACTED>`).<br>• 50 concurrent requests stress test. |
+| **Mutation Testing Suite**<br>`Backend/routers/threshold_router.py`, `Backend/reporting/*` | **Prince Savaliya** | **Ramit** & **Tirth Patel** | • Mutation Testing (`mutmut`) | • Inject mutant operators (e.g. `>` to `>=`, `+` to `-`).<br>• Measure mutation score (Target: $\ge 80\%$ mutants killed).<br>• Document surviving mutants and add missing assertions. |
+| **System & Acceptance Testing (UAT)**<br>All 6 Stakeholder User Stories | **Gaurav Rathod** | **Darpan** & **Om Patel** | • System Black-Box Testing (UAT) | • Trace each User Story from input to expected output.<br>• Validate acceptance criteria (Gherkin scenarios).<br>• Compile Black-Box Equivalence Partitioning matrix. |
+| **UML & Runtime Dynamic Verification**<br>System Architecture & Diagrams | **Shivani** | **Ramit** & **Darpan** | • Architectural Conformance Testing | • Verify that API call sequences match Sequence Diagrams.<br>• Verify Project Health State transitions match State Machine. |
+| **Bug & Incident Coordination**<br>Slack `#testing-bugs` Channel | **Vandit** | **All Team Members** | • Defect Logging & Traceability Proof | • Log every bug raised during peer testing into Slack.<br>• Record resolution commit SHA and verify bug closure.<br>• Export defect log as teamwork and testing evidence. |
+
+---
+
+### 5.3 Concrete Testing Execution Commands & Toolchain
+
+To ensure your team can run these tests immediately without confusion:
+
+```bash
+# 1. Backend Unit Testing & Coverage Report (Prince Savaliya)
+uv run --with-requirements requirements.txt --with mongomock pytest Backend/tests/ --cov=Backend --cov-report=html --cov-report=term
+
+# 2. Frontend Unit & Component Testing (Yagnik N. / Prince Savaliya)
+npm --prefix Frontend test -- --run
+
+# 3. Frontend Build & Static Typecheck (Darpan / Yagnik N.)
+npm --prefix Frontend run build
+
+# 4. Mutation Testing Execution (Prince Savaliya)
+# Run mutmut on critical business logic modules
+uv run mutmut run --paths-to-mutate=Backend/routers/threshold_router.py
+uv run mutmut results
+uv run mutmut show <mutant_id>
+
+# 5. Non-Functional Latency & Health Check Benchmark (Yagnik N.)
+# Measure live Render production response time
+curl -o /dev/null -s -w 'HTTP: %{http_code} | Total Time: %{time_total}s | Connect: %{time_connect}s\n' https://kavach-backend.onrender.com/api/health
+```
+
+---
+
+## 6. Master Timeline & Daily Milestones (Leading to Dec 3 Deadline)
 
 ```
 [Today: Nov 23] ───────► [Nov 24 - 26] ───────► [Nov 27 - 29] ───────► [Nov 30 - Dec 1] ──────► [Dec 2 - 3]
@@ -217,18 +316,18 @@ To ensure zero overlap, maximum accountability, and strong individual Git/Viva e
 
 | Date | Target Milestone | Responsible Tracks |
 | :--- | :--- | :--- |
-| **Nov 23 – 24** | **Kickoff & Template Standardization:** Set up folders in Git, distribute document templates, verify live deployment on Render. | All Team Members |
-| **Nov 25 – 26** | **Requirements, System Design & Coverage:** Finalize FR/NFR/Use Cases (Gaurav), System & Object Design (Ramit), LangGraph Architecture (Tirth), Unit Test Coverage reports (Prince). | Gaurav, Ramit, Tirth, Prince |
-| **Nov 27 – 28** | **UML Diagrams & Sprint Details:** Produce all Class, Sequence, Activity, and State diagrams for Sprints 1–4 (Shivani, Om). Document UI/UX wireframes (Darpan). | Shivani, Om, Darpan |
-| **Nov 29 – 30** | **Mutation Testing, NFR & RTM:** Complete mutation testing (Prince), NFR security/latency reports & Black-box matrices (Yagnik), RTM (Gaurav), Slack evidence (Vandit). | Prince, Yagnik, Gaurav, Vandit |
+| **Nov 23 – 24** | **Kickoff & Testing Setup:** Set up folders in Git, establish Slack `#testing-bugs` channel, verify live deployment on Render. | All Team Members |
+| **Nov 25 – 26** | **Requirements, System Design & Stage 1 Testing:** Finalize FR/NFR/Use Cases (Gaurav), System & Object Design (Ramit), LangGraph Architecture (Tirth), Unit Test Coverage reports (Prince). | Gaurav, Ramit, Tirth, Prince |
+| **Nov 27 – 28** | **UML Diagrams & Stage 2/3 GUI Testing:** Produce all Class, Sequence, Activity, and State diagrams (Shivani, Om). Run GUI & cross-browser tests (Yagnik, Om). Document UI/UX wireframes (Darpan). | Shivani, Om, Darpan, Yagnik |
+| **Nov 29 – 30** | **Stage 4/5/6 Testing (Mutation, NFR, System):** Complete mutation testing (Prince), NFR security/latency reports & Black-box matrices (Yagnik), RTM (Gaurav), Slack defect logs (Vandit). | Prince, Yagnik, Gaurav, Vandit |
 | **Dec 01** | **Slides & Demo Polish:** Finalize strict 10-slide PPT (Yagnik). Rehearse live demonstration (Darpan, Varshil). Compile Contribution Document (Varshil). | Yagnik, Darpan, Varshil, Team |
-| **Dec 02** | **Review & Dry Run:** Full team 20-minute rehearsal (5 min PPT + 10 min Demo + 5 min Viva). Package `<group_No>.zip` and test Google Drive link permissions. | All Team Members |
+| **Dec 02** | **Full Team Dry Run:** Full team 20-minute rehearsal (5 min PPT + 10 min Demo + 5 min Viva). Package `<group_No>.zip` and test Google Drive link permissions. | All Team Members |
 | **Dec 03 (05:00 PM)** | **FIRM DEADLINE 1:** Submit printed, signed Contribution Document to Prof. Saurabh Tiwari's FB-1 letter box or office. | **Shah Varshil (Group Leader)** |
 | **Dec 03 (11:59 PM)** | **FIRM DEADLINE 2:** Submit Google Form (ZIP link, Live Deployment URL). Apply GitHub repository code freeze. | **Shah Varshil (Group Leader)** |
 
 ---
 
-## 6. Pre-Submission Verification Checklist
+## 7. Pre-Submission Verification Checklist
 
 - [ ] **Physical Contribution Document** delivered to Prof. Saurabh Tiwari's FB-1 letter box before **Dec 3, 5:00 PM**.
 - [ ] **Single ZIP File** named `<group_No>.zip` created with every document as a separate file.
@@ -236,7 +335,13 @@ To ensure zero overlap, maximum accountability, and strong individual Git/Viva e
 - [ ] **Live Deployment URL** verified working without crashes, with pre-loaded demo project.
 - [ ] **Strict 10-Slide PPT** matches exactly S1 through S10 structure.
 - [ ] **Per-Sprint Diagrams:** Class and Sequence diagrams included for each of Sprint 1, 2, 3, and 4.
-- [ ] **Mutation Testing Report** included with clear mutation score metrics.
+- [ ] **All 5 Testing Reports Included:**
+  - [ ] Unit Testing Report with code coverage % (PyTest + Vitest).
+  - [ ] System Testing Report with Black-Box Equivalence Partitioning matrix.
+  - [ ] GUI Testing Report with responsive layout & form interaction results.
+  - [ ] Mutation Testing Report with calculated mutation score and mutant analysis.
+  - [ ] Non-Functional Testing Report with latency benchmarks and security tests.
+- [ ] **Peer Cross-Testing Matrix** verified with bug logs in Slack `#testing-bugs`.
 - [ ] **Slack Evidence Document** finalized with screenshots proving teamwork.
 - [ ] **All 10 Team Members** prepared for in-person presentation and individual Viva.
 - [ ] **Zero Commits** pushed to GitHub after **Dec 3, 11:59 PM**.
