@@ -69,6 +69,7 @@ contributors_collection = db["contributors"]
 milestones_collection = db["milestones"]
 metric_snapshots_collection = db["metric_snapshots"]
 report_schedules_collection = db["report_schedules"]
+appeals_collection = db["appeals"]
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +198,16 @@ def ensure_indexes():
             background=True,
         )
         logger.info("General database indexes ensured.")
+        # Appeals: project listing and approved-flag lookups.
+        appeals_collection.create_index(
+            [("projectId", 1), ("submittedAt", -1)],
+            background=True,
+        )
+        appeals_collection.create_index(
+            [("projectId", 1), ("status", 1), ("flagId", 1)],
+            background=True,
+        )
+        logger.info("Database indexes ensured.")
     except Exception as exc:  # pragma: no cover
         # Non-fatal: general indexes may already exist or be created on the next startup.
         logger.warning("Could not ensure general database indexes: %s", exc)
