@@ -57,6 +57,7 @@ from Backend.persistence import get_project, get_project_contributors
 from Backend.persistence import DatabaseError
 from Backend.routers.project_router import (
     _get_user_id,
+    _is_global_admin,
     _is_project_member,
     _parse_object_id,
 )
@@ -147,7 +148,7 @@ def _require_project_member(
             detail="Project not found.",
         )
 
-    if not _is_project_member(project, user_id):
+    if not _is_project_member(project, user_id) and not _is_global_admin(current_user):
         raise HTTPException(
             status_code=403,
             detail="Access denied. You are not a member of this project.",

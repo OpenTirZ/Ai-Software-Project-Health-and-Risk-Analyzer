@@ -485,7 +485,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     const lookup = new Map(cells.map((cell) => [cell.key, cell]));
 
     commits.forEach((commit) => {
-      const time = toTime(commit?.date || commit?.authored_date || commit?.created_at);
+      const time = toTime(commit?.timestamp || commit?.date || commit?.authored_date || commit?.created_at);
       if (Number.isNaN(time)) return;
       const bucket = lookup.get(dayKey(new Date(time)));
       if (bucket) bucket.count += 1;
@@ -514,7 +514,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     const items: FeedItem[] = [];
 
     commits.forEach((commit, index) => {
-      const at = toTime(commit?.date || commit?.authored_date || commit?.created_at);
+      const at = toTime(commit?.timestamp || commit?.date || commit?.authored_date || commit?.created_at);
       if (Number.isNaN(at)) return;
       items.push({
         key: `c-${commit?.sha || index}`,
@@ -559,7 +559,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
 
   const topContributors = useMemo(() => {
     const rows = contributors.map((person) => ({
-      name: person?.login || person?.name || person?.username || 'contributor',
+      name: person?.github_username || person?.login || person?.name || person?.username || 'contributor',
       url: person?.html_url as string | undefined,
       count: Number(person?.contributions || person?.commits || 1),
     }));
@@ -645,7 +645,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   const healthScore =
     healthSummary?.health_score !== null &&
     healthSummary?.health_score !== undefined
-      ? Math.round(healthSummary.health_score)
+      ? Math.floor(healthSummary.health_score)
       : null;
 
   const healthStatus = healthSummary?.status || 'Insufficient Data';
@@ -795,7 +795,8 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/80 sm:text-base lg:mx-0">
-              {healthSummary?.summary_statement ||
+              {healthSummary?.summary_statement?.match(/^.*?\.(?=\s|$)/)?.[0] ||
+                healthSummary?.summary_statement ||
                 'Synchronize repository to evaluate live health statement.'}
             </p>
 
