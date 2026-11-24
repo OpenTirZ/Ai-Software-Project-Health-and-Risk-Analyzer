@@ -687,6 +687,27 @@ class TestPREndpoints:
         resp = test_client.get("/api/projects/507f1f77bcf86cd799439022/prs?state=invalid")
         assert resp.status_code == 422
 
+        resp_all = test_client.get("/api/projects/507f1f77bcf86cd799439022/prs?state=all")
+        assert resp_all.status_code == 422
+
+        self._clear_overrides(app)
+
+    @patch("Backend.routers.data_sync_router.get_prs_for_project")
+    @patch("Backend.routers.data_sync_router._require_project_member")
+    @patch("Backend.routers.data_sync_router._parse_object_id")
+    def test_get_prs_supported_states(self, mock_parse, mock_require, mock_get_prs, test_client, mock_user):
+        self._override_auth(app, mock_user)
+        mock_require.return_value = {"_id": "proj123"}
+        mock_get_prs.return_value = []
+
+        for valid_state in ("open", "closed", "merged"):
+            resp = test_client.get(f"/api/projects/507f1f77bcf86cd799439022/prs?state={valid_state}")
+            assert resp.status_code == 200
+
+        # No state parameter returns all PRs
+        resp_no_state = test_client.get("/api/projects/507f1f77bcf86cd799439022/prs")
+        assert resp_no_state.status_code == 200
+
         self._clear_overrides(app)
 
     @patch("Backend.routers.data_sync_router.sync_project_prs")

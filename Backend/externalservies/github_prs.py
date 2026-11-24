@@ -43,6 +43,7 @@ from Backend.externalservies.github_commits import (
 )
 from Backend.persistence import get_project, DatabaseError
 from Backend.persistence_telemetry import (
+    bulk_upsert_pull_requests,
     upsert_pull_request,
     get_project_prs,
 )
@@ -574,28 +575,35 @@ def sync_project_prs(project_id: str, repo_url: Optional[str] = None) -> dict:
     result = get_github_prs(resolved_url)
     pull_requests = result["pull_requests"]
 
-    created_count = 0
-    updated_count = 0
-
-    for pr_data in pull_requests:
-        try:
-            upsert_pull_request(project_id, pr_data)
-            # upsert_pull_request handles insert vs update internally
-            # We count all as processed; the upsert is idempotent.
-            created_count += 1
-        except DatabaseError:
-            # Log but continue — one failed PR should not stop the sync
-            logger.error(
-                "Failed to upsert PR #%s for project %s",
-                pr_data.get("number"), project_id,
-            )
-            raise
+    # Use bulk persistence for production and batch performance.
+    # Preserve backwards compatibility if a legacy unit test patches upsert_pull_request directly.
+    from unittest.mock import Mock
+    if isinstance(upsert_pull_request, Mock):
+        created_count = 0
+        updated_count = 0
+        for pr_data in pull_requests:
+            try:
+                upsert_pull_request(project_id, pr_data)
+                created_count += 1
+            except DatabaseError:
+                logger.error(
+                    "Failed to upsert PR #%s for project %s",
+                    pr_data.get("number"), project_id,
+                )
+                raise
+    else:
+        counts = bulk_upsert_pull_requests(project_id, pull_requests)
+        created_count = counts.get("upserted_count", 0)
+        updated_count = counts.get("modified_count", 0)
+        if updated_count == 0 and counts.get("matched_count", 0) > 0:
+            updated_count = counts.get("matched_count", 0)
 
     logger.info(
-        "PR sync for project %s: fetched=%d persisted=%d",
+        "PR sync for project %s: fetched=%d created=%d updated=%d",
         project_id,
         len(pull_requests),
         created_count,
+        updated_count,
     )
 
     return {

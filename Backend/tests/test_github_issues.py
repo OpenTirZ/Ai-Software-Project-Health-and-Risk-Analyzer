@@ -1363,7 +1363,8 @@ class TestListEndpoint:
 
     def test_invalid_state_query_is_a_validation_error(self, as_manager, project):
         assert client.get(self.URL, params={"state": "weird"}).status_code == 422
-        # Explanation: FastAPI validates the query parameter.
+        assert client.get(self.URL, params={"state": "all"}).status_code == 422
+        # Explanation: FastAPI validates the query parameter; 'all' is invalid on the strict backend.
 
     def test_developer_member_can_read(self, collection):
         doc = project_document()
