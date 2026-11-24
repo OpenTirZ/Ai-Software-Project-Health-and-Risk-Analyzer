@@ -192,15 +192,15 @@ To ensure zero overlap, maximum accountability, and strong individual Git/Viva e
 
 | Team Member | Primary Role | Assigned Submission Deliverables | Specific Action Items |
 | :--- | :--- | :--- | :--- |
-| **Shah Varshil** | **DevOps, CI/CD & Deployment Lead** *(Group Leader)* | • CI/CD Architecture Document<br>• Docker & Live Cloud Deployment<br>• Physical Contribution Document Coordination | 1. Finalize Render backend & frontend live production URLs.<br>2. Seed live demo repository with realistic sample data.<br>3. Compile the master physical Contribution Document for Prof. Tiwari.<br>4. Submit the final Google Form and manage GitHub code freeze. |
+| **Shah Varshil** | **DevOps, CI/CD & Security Test Harness Lead** *(Group Leader)* | • CI/CD Architecture & Automated Test Pipeline<br>• Security & Secret-Masking Testing Report<br>• Docker & Live Cloud Deployment<br>• Physical Contribution Document Coordination | 1. Configure and maintain GitHub Actions automated CI workflow (running 1,241+ tests on every PR).<br>2. Execute Security & Secret-Masking penetration tests (verifying tokens/passwords never leak in logs or exceptions).<br>3. Finalize Render backend & frontend live production URLs.<br>4. Compile the master physical Contribution Document for Prof. Tiwari by Dec 3, 5 PM. |
 | **Ramit** | **Backend Architecture & System Design Lead** | • System Design Document (Combined)<br>• Object Design Document<br>• API Reference Specification | 1. Document the multi-layer FastAPI architecture.<br>2. Write the Object Design document covering design patterns (Repository, Strategy, Pub-Sub).<br>3. Generate OpenAPI / Swagger documentation export.<br>4. Prepare Git Repository management demonstration for Viva. |
 | **Tirth Patel** | **AI Pipeline & LangGraph Analytics Lead** | • GenAI LangGraph Architecture Doc<br>• Risk & Bottleneck Engine Spec<br>• Slide S6 & S7 (Learnings & Achievements) | 1. Document LangGraph state-graph pipeline, prompt templates, and grounding validators.<br>2. Document health score mathematical formulas and bottleneck heuristic rules.<br>3. Author presentation slides on technical achievements. |
 | **Darpan** | **Frontend UI/UX & Client Architecture Lead** | • UI/UX Design & Wireframes Document<br>• Client Architecture Specification<br>• Live Demo Co-presenter | 1. Compile Figma wireframes, design system, and color token documentation (`#004643`, `#990011`, `#F0FDE5`).<br>2. Document React component hierarchy and state management.<br>3. Polish all user flows for the live 10-minute demo. |
 | **Om Patel** | **Database, Milestones & Sprint Details Lead** | • Sprint 1–4 Details Documentation<br>• MongoDB Database Design<br>• Slide S4 (Milestones) | 1. Document Sprint 1 through 4 backlogs, user stories, and velocity.<br>2. Document MongoDB schemas, indexing strategies, and collection relationships.<br>3. Author Slide S4 on milestone delivery timelines. |
 | **Shivani** | **UML Modeling & Architecture Diagrams Lead** | • Comprehensive UML Diagrams Document<br>• Per-Sprint Class & Sequence Diagrams | 1. Create formal Class & Sequence diagrams for Sprint 1, 2, 3, and 4.<br>2. Create system-wide Class Diagram, Activity Diagrams (AI workflow), and State Machine Diagrams (Health status).<br>3. Export all diagrams in high-resolution vector/PNG formats. |
-| **Prince Savaliya** | **QA & White-Box/Mutation Testing Lead** | • Unit Testing & Code Coverage Report<br>• Mutation Testing Report (`mutmut`)<br>• Slide S9 (Artefacts Rating) | 1. Run full `pytest --cov` and Vitest coverage to export HTML/LCOV reports.<br>2. Execute mutation testing with `mutmut` and write the mutation analysis report.<br>3. Document white-box test design methodologies. |
-| **Gaurav Rathod** | **Requirements & Traceability Lead** | • Complete Requirements Specification (FR/NFR/Use Cases)<br>• Requirements Traceability Matrix (RTM)<br>• Unimplemented Requirements Doc | 1. Consolidate and format FRs, NFRs, and detailed Use Case specifications.<br>2. Construct the end-to-end Requirements Traceability Matrix (RTM).<br>3. Write the Unimplemented Requirements & Justification document. |
-| **Yagnik N.** | **Testing, Verification & Presentation Lead** | • Presentation PPT (Strict 10 Slides S1–S10)<br>• Non-Functional Testing Report (Perf/Security)<br>• System & Acceptance Black-Box Testing Matrix<br>• Presentation Timekeeper | 1. Create the official PPT adhering strictly to slides S1 through S10.<br>2. Execute performance benchmarks (latency, throughput) and security tests.<br>3. Document black-box system test matrices and acceptance criteria validation.<br>4. Rehearse the strict 5-minute presentation timing with the team. |
+| **Prince Savaliya** | **QA, Structural & White-Box Testing Lead** | • White-Box Unit Testing Report (Statement, Branch, Condition & Control Flow Coverage)<br>• Mutation Testing Report (`mutmut`)<br>• Slide S9 (Artefacts Rating) | 1. Generate line/statement and branch coverage reports via `pytest --cov --cov-branch`.<br>2. Perform Condition Coverage on compound boolean expressions and Control Flow Testing (CFG & Cyclomatic Complexity).<br>3. Execute mutation testing using `mutmut` and document mutation score metrics. |
+| **Gaurav Rathod** | **Data-Flow, Boundary, Regression & Requirements Lead** | • Data-Flow Testing Report (Def-Use Chains)<br>• Boundary Value Analysis & Equivalence Partitioning Matrix<br>• Automated Regression Testing Report<br>• Requirements Traceability Matrix (RTM) | 1. Identify and document variable Def-Use chains and data-flow anomalies.<br>2. Design and document Boundary Value Analysis (BVA) and Equivalence Partitioning test cases.<br>3. Oversee regression test runs across all 1,241+ test cases.<br>4. Build the RTM linking User Stories $\rightarrow$ Requirements $\rightarrow$ Design $\rightarrow$ Test IDs. |
+| **Yagnik N.** | **Performance, Non-Functional Testing & Presentation Lead** | • Non-Functional Testing Report (Load, Stress, Volume, Endurance & Latency)<br>• System & Acceptance Black-Box Testing Matrix<br>• Presentation PPT (Strict 10 Slides S1–S10)<br>• Presentation Timekeeper | 1. Execute performance benchmarks: Load testing, Stress limits, Volume data tests, and Response Time latency (<500ms).<br>2. Perform Endurance/Soak testing on background reporting daemon.<br>3. Document system black-box test matrices and acceptance criteria.<br>4. Assemble the official 10-slide PPT and coordinate team rehearsal. |
 | **Vandit** | **Slack Collaboration & Teamwork Evidence Lead** | • Slack Communication & Teamwork Evidence Document | 1. Curate Slack channel logs, team discussions, and standup evidence.<br>2. Collect screenshots of technical coordination and PR reviews.<br>3. Package collaboration evidence for the submission archive. |
 
 ---
@@ -301,6 +301,66 @@ uv run mutmut show <mutant_id>
 # Measure live Render production response time
 curl -o /dev/null -s -w 'HTTP: %{http_code} | Total Time: %{time_total}s | Connect: %{time_connect}s\n' https://kavach-backend.onrender.com/api/health
 ```
+
+---
+
+### 5.4 Detailed Testing Breakdown for Prince, Gaurav, Yagnik & Varshil
+
+To guarantee 100% academic compliance with the course syllabus and evaluation rubrics, the testing responsibilities are divided into 4 specialized technical tracks:
+
+#### Track 1: Structural & White-Box Testing (Owned by: Prince Savaliya)
+* **Statement Coverage:** Run full `pytest --cov=Backend` and Vitest coverage to ensure all lines of code are executed. Target: $\ge 85\%$ statement coverage.
+* **Branch & Decision Coverage:** Execute `pytest --cov-branch` to verify both `True` and `False` branches for every `if/else`, `try/except`, and conditional statement.
+* **Condition & Multiple Condition Coverage:** Test compound boolean expressions (e.g. in `Backend/auth/roles.py`, `Backend/routers/threshold_router.py`, and `Backend/persistence.py`) where clauses combine `and`, `or`, and `not`.
+* **Control Flow Testing (CFT):** 
+  * Draw Control Flow Graphs (CFG) for 2 critical core algorithms:
+    1. The Health Score calculation engine (`Backend/analysis/health_summary.py`).
+    2. The Scheduled Report Worker dispatch pipeline (`Backend/reporting/delivery_dispatcher.py`).
+  * Calculate Cyclomatic Complexity:
+    $$V(G) = E - N + 2P = \text{Number of Predicate Nodes} + 1$$
+  * Derive the independent Basis Path set and verify that test cases execute every path.
+* **Mutation Testing (`mutmut`):** 
+  * Run `mutmut run --paths-to-mutate=Backend/routers/threshold_router.py,Backend/analysis/` to inject synthetic faults.
+  * Compute Mutation Score:
+    $$\text{Mutation Score} = \frac{\text{Killed Mutants}}{\text{Total Mutants Generated}} \times 100$$
+  * Document surviving mutants and create new assertions to kill them.
+
+#### Track 2: Data-Flow, Boundary, Regression & Requirements Testing (Owned by: Gaurav Rathod)
+* **Data-Flow Testing (DFT):**
+  * Identify Definition-Use (def-use) associations for critical variables (e.g., `health_score`, `active_flags`, `jwt_token`, `project_status`).
+  * Verify all-defs, all-uses, and def-clear paths, documenting absence of data-flow anomalies (e.g., uninitialized reads or overwrites without use).
+* **Boundary Value Analysis (BVA) & Equivalence Partitioning (EP):**
+  * Construct black-box input boundary test tables:
+    * *Health Scores:* Just below (49), at (50), just above (51); extreme boundaries (0, 100); invalid inputs (<0, >100, strings).
+    * *Threshold Delays:* PR review delay at 0h, 24h, 48h, 72h.
+    * *Commit Ingestion Limits:* 0 commits, 1 commit, 100 commits (page limit), 500 commits.
+    * *Email Inputs:* Valid corporate emails, disposable domains, invalid formats.
+* **Automated Regression Testing:**
+  * Coordinate full regression test runs across all 1,241+ backend and frontend tests.
+  * Document regression test execution logs proving that newly integrated features (Appeals, Audit logs) caused zero regressions in legacy Sprint 1–3 modules.
+* **Requirements Traceability Matrix (RTM):**
+  * Compile the master RTM mapping:
+    $$\text{User Story ID} \longleftrightarrow \text{FR/NFR ID} \longleftrightarrow \text{Implementation File} \longleftrightarrow \text{Automated Test Case ID}$$
+
+#### Track 3: Performance & Non-Functional Testing (Owned by: Yagnik N.)
+* **Load Testing:** Simulate normal expected user traffic (10–25 concurrent users querying project dashboards and generating reports) using tools like `k6` or `Locust`.
+* **Stress Testing:** Push API endpoints to their breaking point (50–100 concurrent requests) to verify error resilience, timeout handling, and graceful degradation without database crashes.
+* **Volume Testing:** Ingest large repository telemetry datasets (5,000+ commits, 500+ PRs, 1,000+ issues) and evaluate aggregation query execution times.
+* **Response Time & Latency Testing:** Measure API response times (<500ms target) for critical endpoints (`GET /api/projects`, `GET /api/projects/{id}/health-summary`, `POST /api/projects/{id}/reports`).
+* **Endurance / Soak Testing:** Monitor the background worker daemon (`Backend.reporting.scheduler`) running continuously for 24 hours to verify memory stability, connection pool health, and zero memory leaks.
+* **Presentation PPT (Strict 10 Slides):** Formulate Slides S7 (Achievements) and S9 (Artefacts Rating) using the collected performance and testing metrics.
+
+#### Track 4: DevOps Automated CI Test Harness & Security Testing (Owned by: Shah Varshil)
+* **Automated GitHub Actions CI Test Pipeline:**
+  * Maintain `.github/workflows/ci.yml` and `backend-tests.yml` to automatically trigger test suites on every pull request.
+  * Enforce branch protection rules requiring passing tests before PR merges.
+* **Security & Secret-Masking Penetration Testing:**
+  * Execute penetration tests verifying that secrets (`GITHUB_TOKEN`, `JWT_SECRET_KEY`, `MONGO_URI`, passwords) are strictly filtered and masked with `<REDACTED>` in application logs.
+  * Test JWT expiration, signature tampering, and RBAC privilege escalation (e.g. Developer attempting Admin operations).
+* **Containerized Test Isolation:**
+  * Maintain `mongomock` and MongoDB 7.0 Atlas test parity across multi-stage Docker builds.
+* **Physical Contribution Document Coordination:**
+  * Consolidate verified test counts and commit metrics for Prince, Gaurav, Yagnik, and Varshil into the official document for Prof. Saurabh Tiwari.
 
 ---
 
