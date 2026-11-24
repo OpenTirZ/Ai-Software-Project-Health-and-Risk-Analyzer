@@ -27,13 +27,33 @@ import time
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+import glob
 import pytest
 import pymongo
 from bson import ObjectId
 from pymongo.synchronous.mongo_client import MongoClient as RealMongoClient
 from pymongo.errors import DuplicateKeyError
 
-MONGOD_PATH = r"C:\Program Files\MongoDB\Server\9.0\bin\mongod.exe"
+
+def _find_mongod_path() -> str:
+    """Discover the local mongod executable across environment variables, PATH, and installations."""
+    env_path = os.environ.get("MONGOD_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+
+    path_exe = shutil.which("mongod")
+    if path_exe and os.path.exists(path_exe):
+        return path_exe
+
+    matches = glob.glob(r"C:\Program Files\MongoDB\Server\*\bin\mongod.exe")
+    if matches:
+        matches.sort(reverse=True)
+        return matches[0]
+
+    return r"C:\Program Files\MongoDB\Server\9.0\bin\mongod.exe"
+
+
+MONGOD_PATH = _find_mongod_path()
 TEST_PORT = 27019
 TEST_URI = f"mongodb://127.0.0.1:{TEST_PORT}"
 TEST_DB_NAME = "test_milestone_real_db"

@@ -179,7 +179,7 @@ export const AdminPanel: React.FC = () => {
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Admin Panel</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Admin Panel</h1>
               <p className="text-xs text-white/70 mt-0.5">
                 Manage platform users, roles, and audit history
               </p>

@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import type { PageView, ReportItem } from '../types';
 import { reportsData } from '../data/mockData';
-import { reportApi, type ProjectResponse } from '../services/api';
+import { reportApi, metricsApi, type ProjectResponse, type HealthSummaryData } from '../services/api';
+import {
+  reportService,
+  type Recommendation,
+  type EnrichedReport,
+} from '../services/reportService';
+import { ExplanationDrawer } from '../components/reports/ExplanationDrawer';
+import { RecommendationCards } from '../components/reports/RecommendationCard';
 import {
   Plus,
   Download,
@@ -10,13 +17,24 @@ import {
   X,
   AlertCircle,
   FileText,
+  Info,
+  Loader2,
+  ShieldAlert,
 } from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 
 interface ReportsProps {
   selectedRepo: string;
   project?: ProjectResponse | null;
   onNavigate: (view: PageView) => void;
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function escapePdf(str: string): string {
   return str.replace(/[\\()]/g, '\\$&');
@@ -42,7 +60,7 @@ function generatePDFBlob(report: ReportItem): Blob {
     'ET',
   ].join('\n');
 
-  const streamLen = streamLength(lines);
+  const streamLen = new TextEncoder().encode(lines).length;
 
   const pdfParts = [
     '%PDF-1.4\n',
@@ -73,9 +91,45 @@ function generatePDFBlob(report: ReportItem): Blob {
   return new Blob([fullPdf], { type: 'application/pdf' });
 }
 
-function streamLength(value: string): number {
-  return new TextEncoder().encode(value).length;
-}
+const healthColor = (score: number) => {
+  if (score < 50) return 'text-[#CC1F2E]';
+  if (score < 75) return 'text-[#B45309]';
+  return 'text-[#0B6B63]';
+};
+
+// ---------------------------------------------------------------------------
+// Generation Skeleton
+// ---------------------------------------------------------------------------
+const GenerationSkeleton: React.FC = () => (
+  <div className="space-y-5 animate-pulse">
+    <div className="rounded-xl border border-[#9ED4C8] bg-white p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <Loader2 className="h-5 w-5 animate-spin text-[#0B6B63]" />
+        <span className="text-sm font-semibold text-[#0B6B63]">
+          Generating Status Report…
+        </span>
+      </div>
+      <div className="space-y-3">
+        <div className="h-4 w-3/4 rounded bg-slate-100" />
+        <div className="h-4 w-1/2 rounded bg-slate-100" />
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-20 rounded-lg bg-slate-100" />
+          ))}
+        </div>
+        <div className="mt-4 space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-10 rounded-lg bg-slate-50" />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Reports Page
+// ---------------------------------------------------------------------------
 
 export const Reports: React.FC<ReportsProps> = ({
   selectedRepo,
@@ -89,6 +143,26 @@ export const Reports: React.FC<ReportsProps> = ({
   const [generating, setGenerating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // AI explanation drawer state
+  const [drawerFlag, setDrawerFlag] = useState<{
+    id: string;
+    type: string;
+    severity: string;
+    message: string;
+    evidence?: any;
+  } | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Flags + recommendations state
+  const [healthFlags, setHealthFlags] = useState<HealthSummaryData | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [recsError, setRecsError] = useState<string | null>(null);
+
+  // PDF download state
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+
+  // Load reports from API
   useEffect(() => {
     if (!project?.id) return;
 
@@ -109,6 +183,27 @@ export const Reports: React.FC<ReportsProps> = ({
       });
   }, [project?.id]);
 
+  // Load flags + recommendations
+  useEffect(() => {
+    if (!project?.id) return;
+
+    // Health flags for explanation drawer
+    reportService
+      .getHealthFlags(project.id)
+      .then(setHealthFlags)
+      .catch(() => {/* non-critical */});
+
+    // Recommendations
+    setLoadingRecs(true);
+    setRecsError(null);
+    reportService
+      .getBreakdownWithRecommendations(project.id)
+      .then(({ recommendations: recs }) => setRecommendations(recs))
+      .catch((e) => setRecsError(e.message || 'Failed to load recommendations'))
+      .finally(() => setLoadingRecs(false));
+  }, [project?.id]);
+
+  // Generate report
   const handleGenerateReport = async () => {
     setGenerating(true);
     setApiError(null);
@@ -152,36 +247,56 @@ export const Reports: React.FC<ReportsProps> = ({
     }
   };
 
-  const handleDownloadPDF = (reportToDownload?: ReportItem) => {
+  // PDF download — try backend first, then client-side
+  const handleDownloadPDF = async (reportToDownload?: ReportItem) => {
     const target = reportToDownload || selectedReport;
     if (!target) return;
 
+    setDownloadingPdf(target.id);
+
+    if (project?.id) {
+      try {
+        await reportService.downloadPDF(project.id, target.id, target);
+        setDownloadingPdf(null);
+        return;
+      } catch {
+        // Fall through to client-side
+      }
+    }
+
+    // Client-side fallback
     const blob = generatePDFBlob(target);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-
     const cleanName = (target.project || selectedRepo).replace(
       /[^a-zA-Z0-9_-]/g,
       '_',
     );
-
     link.setAttribute('download', `${cleanName}_health_report.pdf`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    setDownloadingPdf(null);
   };
 
-  const healthColor = (score: number) => {
-    if (score < 50) return 'text-[#CC1F2E]';
-    if (score < 75) return 'text-[#B45309]';
-    return 'text-[#0B6B63]';
+  // Open explanation drawer for a flag
+  const handleExplainFlag = (flag: {
+    id: string;
+    type: string;
+    severity: string;
+    message: string;
+    evidence?: any;
+  }) => {
+    setDrawerFlag(flag);
+    setIsDrawerOpen(true);
   };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-5 md:p-8">
 
+      {/* ─── Header ─── */}
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#0E2A2A] md:text-3xl">
@@ -201,11 +316,16 @@ export const Reports: React.FC<ReportsProps> = ({
           disabled={generating}
           className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
         >
-          <Plus className="h-4 w-4" />
-          {generating ? 'Generating Report...' : 'Generate Report'}
+          {generating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          {generating ? 'Generating Report…' : 'Generate Status Report'}
         </button>
       </div>
 
+      {/* ─── Error banner ─── */}
       {apiError && (
         <div
           role="alert"
@@ -231,7 +351,75 @@ export const Reports: React.FC<ReportsProps> = ({
         </div>
       )}
 
-      {reports.length === 0 ? (
+      {/* ─── Generation skeleton ─── */}
+      {generating && <GenerationSkeleton />}
+
+      {/* ─── Active Flags (clickable for AI explanation) ─── */}
+      {healthFlags && healthFlags.active_flags.length > 0 && !generating && (
+        <section className="rounded-xl border border-[#9ED4C8] bg-white p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldAlert className="h-5 w-5 text-[#CC1F2E]" />
+            <h2 className="text-sm font-bold text-[#0E2A2A]">Active Risk Flags</h2>
+            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+              {healthFlags.active_flags.length}
+            </span>
+            <span className="ml-auto text-[11px] text-slate-400">
+              Click a flag for AI-powered explanation
+            </span>
+          </div>
+          <div className="space-y-2">
+            {healthFlags.active_flags.map((flag) => {
+              const isHigh = flag.severity === 'high';
+              const isMed = flag.severity === 'medium';
+              return (
+                <button
+                  key={flag.id}
+                  type="button"
+                  onClick={() => handleExplainFlag(flag)}
+                  className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                  style={{
+                    borderColor: isHigh ? '#FECACA' : isMed ? '#FDE68A' : '#BBF7D0',
+                    backgroundColor: isHigh ? '#FEF2F2' : isMed ? '#FFFBEB' : '#F0FDF4',
+                  }}
+                >
+                  <Info className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs font-semibold text-slate-800 block truncate">
+                      {flag.message}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {flag.type} · {flag.severity}
+                    </span>
+                  </div>
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                    style={{
+                      color: isHigh ? '#991B1B' : isMed ? '#92400E' : '#166534',
+                      backgroundColor: isHigh ? '#FEE2E2' : isMed ? '#FEF3C7' : '#DCFCE7',
+                    }}
+                  >
+                    Explain
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ─── Advisory Recommendation Cards ─── */}
+      {!generating && (
+        <section className="rounded-xl border border-[#9ED4C8] bg-white p-5">
+          <RecommendationCards
+            recommendations={recommendations}
+            isLoading={loadingRecs}
+            error={recsError}
+          />
+        </section>
+      )}
+
+      {/* ─── Report list ─── */}
+      {reports.length === 0 && !generating ? (
         <div className="rounded-xl border border-[#9ED4C8] bg-white px-6 py-14 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#CDEFE6] text-[#0B6B63]">
             <FileText className="h-6 w-6" />
@@ -269,6 +457,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 </span>
               </div>
 
+              {/* Stats cards */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
@@ -311,6 +500,21 @@ export const Reports: React.FC<ReportsProps> = ({
                 </div>
               </div>
 
+              {/* Executive summary */}
+              <div>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[#3F5F5C]">
+                  Executive Summary
+                </h3>
+                <p className="text-sm leading-6 text-[#3F5F5C]">
+                  The software project evaluated meets the enterprise
+                  reliability criteria. No blocker regressions were detected
+                  across the master pipeline. Key improvement opportunities
+                  center around pull request aging velocity and workload
+                  distribution balance.
+                </p>
+              </div>
+
+              {/* Recommendations */}
               <div>
                 <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-[#3F5F5C]">
                   Key Actionable Recommendations
@@ -331,6 +535,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 </div>
               </div>
 
+              {/* Action buttons */}
               <div className="flex flex-wrap justify-end gap-2 border-t border-[#9ED4C8] pt-4">
                 <button
                   onClick={() => {
@@ -345,10 +550,15 @@ export const Reports: React.FC<ReportsProps> = ({
 
                 <button
                   onClick={() => handleDownloadPDF(report)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+                  disabled={downloadingPdf === report.id}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
                 >
-                  <Download className="h-4 w-4" />
-                  Download PDF
+                  {downloadingPdf === report.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {downloadingPdf === report.id ? 'Downloading…' : 'Download PDF'}
                 </button>
               </div>
             </article>
@@ -356,6 +566,7 @@ export const Reports: React.FC<ReportsProps> = ({
         </div>
       )}
 
+      {/* ─── View Report Modal ─── */}
       {showViewModal && selectedReport && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#0E2A2A]/60 p-4"
@@ -460,15 +671,31 @@ export const Reports: React.FC<ReportsProps> = ({
 
               <button
                 onClick={() => handleDownloadPDF(selectedReport)}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49]"
+                disabled={downloadingPdf === selectedReport.id}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] disabled:opacity-60"
               >
-                <Download className="h-4 w-4" />
+                {downloadingPdf === selectedReport.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
                 Export PDF
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ─── AI Explanation Drawer ─── */}
+      <ExplanationDrawer
+        projectId={project?.id || ''}
+        flag={drawerFlag}
+        isOpen={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setDrawerFlag(null);
+        }}
+      />
     </div>
   );
 };

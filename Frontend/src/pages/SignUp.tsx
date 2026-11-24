@@ -99,6 +99,8 @@ export const SignUp: React.FC<SignUpProps> = ({
       newErrors.password = 'Password is required.';
     } else if (password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters.';
+    } else if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+      newErrors.password = 'Password must not contain spaces or whitespace characters.';
     }
 
     if (!confirmPassword) {
@@ -136,12 +138,12 @@ export const SignUp: React.FC<SignUpProps> = ({
     <main className="flex min-h-screen w-full flex-col app-canvas md:flex-row">
 
       <section className="hero-vibrant flex w-full flex-col justify-between p-6 text-white sm:p-10 md:min-h-screen md:w-[43%] md:p-12 lg:p-16">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1.5 shadow-md">
+        <div className="flex items-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1.5 shadow-lg shadow-black/20">
             <img 
               src="/assets/kavach-logo.png" 
               alt="कVaच Logo" 
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain filter drop-shadow-md"
             />
           </div>
           <div>

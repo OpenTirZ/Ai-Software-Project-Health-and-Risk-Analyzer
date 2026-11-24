@@ -1,8 +1,11 @@
+
 """
 Pydantic schemas for Project Management and Repository Association.
 """
+
 import re
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -12,8 +15,27 @@ GITHUB_REPO_URL_REGEX = re.compile(
     r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?/?$"
 )
 
-# Regular expression to validate Git branch names (common alphanumeric and standard branch characters)
-BRANCH_NAME_REGEX = re.compile(r"^[A-Za-z0-9_.\-\/]+$")
+# Regular expression to validate Git branch names
+BRANCH_NAME_REGEX = re.compile(r"^[A-Za-z0-9_.\-/]+$")
+
+
+def _is_valid_branch_name(branch: str) -> bool:
+    """Validate common Git ref-format restrictions for branch names."""
+    if not BRANCH_NAME_REGEX.fullmatch(branch):
+        return False
+    if branch == "@" or branch.startswith("/") or branch.endswith("/"):
+        return False
+    if "//" in branch or ".." in branch or "@{" in branch:
+        return False
+
+    components = branch.split("/")
+    return all(
+        component
+        and not component.startswith(".")
+        and not component.endswith(".")
+        and not component.lower().endswith(".lock")
+        for component in components
+    )
 
 
 class ProjectMember(BaseModel):
@@ -75,7 +97,7 @@ class CreateProjectRequest(BaseModel):
         stripped = v.strip()
         if not stripped:
             raise ValueError("Default branch cannot be empty or whitespace only.")
-        if not BRANCH_NAME_REGEX.match(stripped):
+        if not _is_valid_branch_name(stripped):
             raise ValueError("Invalid branch name format.")
         return stripped
 
@@ -136,7 +158,7 @@ class UpdateProjectRequest(BaseModel):
         stripped = v.strip()
         if not stripped:
             raise ValueError("Default branch cannot be empty or whitespace only.")
-        if not BRANCH_NAME_REGEX.match(stripped):
+        if not _is_valid_branch_name(stripped):
             raise ValueError("Invalid branch name format.")
         return stripped
 

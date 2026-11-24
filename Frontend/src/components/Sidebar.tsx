@@ -3,14 +3,17 @@ import type { PageView, UserProfileData } from '../types';
 import {
   FolderGit2,
   LayoutDashboard,
+  Gauge,
   HeartPulse,
   ShieldAlert,
   Users,
   Activity as ActivityIcon,
   FileText,
   LogOut,
-  ShieldCheck,
   Settings2,
+  MessageSquareWarning,
+  Settings,
+  ScrollText,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -18,6 +21,7 @@ interface SidebarProps {
   currentUser?: UserProfileData;
   onNavigate: (view: PageView) => void;
   onLogout: () => void;
+  isOpen?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,18 +29,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   onNavigate,
   onLogout,
+  isOpen = false,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
 
-  const navItems = [
-    { id: 'projects', label: 'All Repositories', icon: FolderGit2 },
-    { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
-    { id: 'health-analysis', label: 'Health Analysis', icon: HeartPulse },
-    { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
-    { id: 'contributors', label: 'Team and Contributors', icon: Users },
-    { id: 'activity', label: 'Activity', icon: ActivityIcon },
-    { id: 'reports', label: 'Reports', icon: FileText },
+  const navGroups = [
+    {
+      label: 'Portfolio',
+      items: [{ id: 'projects', label: 'All Repositories', icon: FolderGit2 }],
+    },
+    {
+      label: 'Active project',
+      items: [
+        { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
+        { id: 'dashboard', label: 'Dashboard', icon: Gauge },
+        { id: 'health-analysis', label: 'Health Analysis', icon: HeartPulse },
+        { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
+        { id: 'contributors', label: 'Team and Contributors', icon: Users },
+        { id: 'activity', label: 'Activity', icon: ActivityIcon },
+        { id: 'reports', label: 'Reports', icon: FileText },
+        { id: 'appeals', label: 'Appeals', icon: MessageSquareWarning },
+        { id: 'project-settings', label: 'Project Settings', icon: Settings },
+      ],
+    },
   ] as const;
+
+  const navItemClass = (isActive: boolean) =>
+    `group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] ${
+      isActive
+        ? 'bg-gradient-to-r from-[#C8102E] to-[#8A000F] font-semibold text-white shadow-lg shadow-black/30'
+        : 'font-medium text-white/75 hover:bg-white/10 hover:text-white'
+    }`
 
   const initials = currentUser?.fullName
     ? currentUser.fullName
@@ -52,7 +75,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const displayRole = currentUser?.role || 'Team Member';
 
   return (
-    <aside className="flex min-h-screen w-[260px] shrink-0 flex-col hero-vibrant select-none text-white">
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 flex min-h-screen w-[260px] shrink-0 flex-col hero-vibrant select-none text-white transition-transform duration-200 lg:static lg:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
 
       <button
         type="button"
@@ -60,11 +87,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-label="Go to project overview"
         className="flex w-full items-center gap-3 border-b border-white/15 px-5 py-5 text-left"
       >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1 shadow-lg shadow-black/30">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1 shadow-lg shadow-black/30">
           <img 
             src="/assets/kavach-logo.png" 
             alt="कVaच Logo" 
-            className="w-full h-full object-contain"
+            className="w-full h-full object-contain filter drop-shadow-md"
           />
         </div>
 
@@ -82,57 +109,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <nav
         aria-label="Main navigation"
-        className="flex-1 space-y-1 overflow-y-auto px-3 py-6"
+        className="flex-1 space-y-6 overflow-y-auto px-3 py-6"
       >
-        <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">
-          Workspace
-        </p>
+        {navGroups.map((group) => (
+          <div key={group.label} className="space-y-1">
+            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-white/55">
+              {group.label}
+            </p>
 
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentView === item.id;
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentView === item.id;
 
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onNavigate(item.id as PageView)}
-              aria-current={isActive ? 'page' : undefined}
-              className={`flex w-full items-center gap-3 rounded-md border-l-[3px] px-3 py-2.5 text-left text-[13px] ${
-                isActive
-                  ? 'border-[#FF8A95] bg-gradient-to-r from-[#C8102E] to-[#8A000F] font-semibold text-white shadow-lg shadow-black/30'
-                  : 'border-transparent font-medium text-white/75 hover:translate-x-1 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <Icon
-                className={`h-[17px] w-[17px] shrink-0 ${
-                  isActive ? 'text-white' : 'text-white/70'
-                }`}
-                strokeWidth={1.9}
-              />
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onNavigate(item.id as PageView)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={navItemClass(isActive)}
+                >
+                  <Icon
+                    className={`h-[17px] w-[17px] shrink-0 ${
+                      isActive ? 'text-white' : 'text-white/70 group-hover:text-white'
+                    }`}
+                    strokeWidth={1.9}
+                  />
 
-              <span className="truncate">{item.label}</span>
-            </button>
-          );
-        })}
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
 
         {isAdmin && (
-          <>
-            <div className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-widest text-white/55">
+          <div className="space-y-1">
+            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-white/55">
               Administration
-            </div>
+            </p>
             <button
+              type="button"
               onClick={() => onNavigate('admin')}
-              className={`flex w-full items-center gap-3 rounded-md border-l-[3px] px-3 py-2.5 text-left text-[13px] ${
-                currentView === 'admin'
-                  ? 'border-[#FF8A95] bg-gradient-to-r from-[#C8102E] to-[#8A000F] font-semibold text-white shadow-lg shadow-black/30'
-                  : 'border-transparent font-medium text-white/75 hover:translate-x-1 hover:bg-white/10 hover:text-white'
-              }`}
+              aria-current={currentView === 'admin' ? 'page' : undefined}
+              className={navItemClass(currentView === 'admin')}
             >
               <Settings2 className="h-[17px] w-[17px] shrink-0" />
               <span className="truncate">Admin Panel</span>
             </button>
-          </>
+            <button
+              type="button"
+              onClick={() => onNavigate('audit-logs' as PageView)}
+              aria-current={currentView === ('audit-logs' as PageView) ? 'page' : undefined}
+              className={navItemClass(currentView === ('audit-logs' as PageView))}
+            >
+              <ScrollText className="h-[17px] w-[17px] shrink-0" />
+              <span className="truncate">Audit Logs</span>
+            </button>
+          </div>
         )}
       </nav>
 
@@ -141,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('profile')}
-          className="flex w-full items-center gap-3 rounded-md border border-white/15 bg-white/10 p-3 text-left hover:bg-white/15"
+          className="flex w-full items-center gap-3 rounded-xl border border-white/15 bg-white/10 p-3 text-left hover:bg-white/15"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E5344A] to-[#990011] text-xs font-bold text-white">
             {initials}

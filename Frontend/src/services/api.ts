@@ -369,7 +369,13 @@ export const authApi = {
     };
   },
 
-  async _mockSignup(name: string, username: string, email: string, _password: string): Promise<AuthResponse> {
+  async _mockSignup(name: string, username: string, email: string, password: string): Promise<AuthResponse> {
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
+    }
+    if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+      throw new Error('Password must not contain spaces or whitespace characters.');
+    }
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
     let registeredUsers: Array<{ email: string; name: string; username: string }> = [];
@@ -1193,7 +1199,128 @@ export const adminApi = {
 };
 
 // ===========================================================================
-// 9. USER SETTINGS API (/api/auth/me/settings)
+// 9. APPEAL API (/api/projects/:id/appeals)
+// ===========================================================================
+export interface Appeal {
+  id: string;
+  project_id: string;
+  flag_id: string;
+  flag_type: string;
+  flag_message: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submitted_by: string;
+  submitted_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_comment: string | null;
+}
+
+export const appealApi = {
+  /**
+   * Submit an appeal against a health flag.
+   * Calls: POST /api/projects/{projectId}/appeals
+   */
+  async submitAppeal(
+    projectId: string,
+    payload: { flag_id: string; flag_type: string; flag_message: string; reason: string }
+  ): Promise<Appeal> {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/appeals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to submit appeal (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * List all appeals for a project.
+   * Calls: GET /api/projects/{projectId}/appeals
+   */
+  async getAppeals(projectId: string): Promise<Appeal[]> {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/appeals`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch appeals (${res.status})`));
+    }
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.appeals || []);
+  },
+
+  /**
+   * Review (approve / reject) an existing appeal.
+   * Calls: PATCH /api/projects/{projectId}/appeals/{appealId}
+   */
+  async reviewAppeal(
+    projectId: string,
+    appealId: string,
+    payload: { status: 'approved' | 'rejected'; review_comment?: string }
+  ): Promise<Appeal> {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/appeals/${appealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to review appeal (${res.status})`));
+    }
+    return res.json();
+  },
+};
+
+// ===========================================================================
+// 10. PROJECT LIFECYCLE API (/api/projects/:id/archive, DELETE)
+// ===========================================================================
+export interface LifecycleResponse {
+  message: string;
+  project_id: string;
+  status?: string;
+  cascade_summary?: Record<string, number>;
+}
+
+export const projectLifecycleApi = {
+  /**
+   * Archive a project (owner / admin only).
+   * Calls: POST /api/projects/{projectId}/archive
+   */
+  async archiveProject(projectId: string): Promise<LifecycleResponse> {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/archive`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to archive project (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Soft-delete a project with cascade (owner / admin only).
+   * Calls: DELETE /api/projects/{projectId}
+   */
+  async deleteProject(projectId: string): Promise<LifecycleResponse> {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to delete project (${res.status})`));
+    }
+    return res.json();
+  },
+};
+
+// ===========================================================================
+// 11. USER SETTINGS API (/api/auth/me/settings)
 // ===========================================================================
 export interface NotificationPreferences {
   high_risk_threshold: boolean;

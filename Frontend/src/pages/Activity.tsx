@@ -82,11 +82,24 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
 
       await loadTabData(project.id, activeTab);
       setTimeout(() => setSyncFeedback(null), 3500);
+
     } catch (err: any) {
-      setSyncFeedback(
-        `Sync note: ${err.message || 'Synchronization failed.'}`,
-      );
-      setTimeout(() => setSyncFeedback(null), 4000);
+      const status =
+        err.status ||
+        Number(err.message?.match(/\((\d{3})\)$/)?.[1]);
+
+      let message = err.message || 'Synchronization failed.';
+
+      if (status === 403) {
+        message = 'You do not have permission to sync this data. Please check your project role and membership.';
+      } else if (status === 404) {
+        message = 'The requested project or GitHub repository could not be found.';
+      } else if (status === 429) {
+        message = 'GitHub API rate limit exceeded. Please try again later.';
+      }
+
+      setSyncFeedback(`Sync failed: ${message}`);
+      setTimeout(() => setSyncFeedback(null), 5000);
     } finally {
       setIsSyncing(false);
     }
@@ -115,7 +128,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
   const filteredCommits = commits.filter((c) => {
     const msg = (c.message || '').toLowerCase();
     const author = (
-      c.author?.name || c.author_name || ''
+      (typeof c.author === 'string' ? c.author : c.author?.name) || c.author_name || ''
     ).toLowerCase();
     const sha = (c.sha || '').toLowerCase();
 
@@ -349,11 +362,11 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
             <div className="divide-y divide-[#9ED4C8]">
               {filteredCommits.map((c, i) => {
                 const authorName =
-                  c.author?.name ||
+                  (typeof c.author === 'string' ? c.author : c.author?.name) ||
                   c.author_name ||
                   c.author?.login ||
                   'Developer';
-                const dateStr = c.date || c.authored_date || c.created_at;
+                const dateStr = c.timestamp || c.date || c.authored_date || c.created_at;
                 const shortSha = (c.sha || '').substring(0, 7);
 
                 return (
