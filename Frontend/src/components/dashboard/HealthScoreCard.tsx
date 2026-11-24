@@ -10,7 +10,6 @@ const GREEN = '#16A34A';
 const AMBER = '#B45309';
 const RED = '#CC1F2E';
 const TRACK_BG = '#E5E7EB';
-const BRAND = '#0B6B63';
 
 function statusColor(status: string): string {
   switch (status) {
@@ -109,8 +108,8 @@ export const HealthScoreCard: React.FC<Props> = ({ data, isLoading, error }) => 
       </div>
 
       {/* Gauge */}
-      <div className="relative mx-auto" style={{ width: 180, height: 110 }}>
-        <ResponsiveContainer width="100%" height={180}>
+      <div className="relative mx-auto w-full max-w-[180px] h-[110px]">
+        <ResponsiveContainer width="100%" height={110}>
           <PieChart>
             <Pie
               data={gaugeData}
@@ -130,7 +129,7 @@ export const HealthScoreCard: React.FC<Props> = ({ data, isLoading, error }) => 
           </PieChart>
         </ResponsiveContainer>
         {/* Score label */}
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pointer-events-none">
           <span className="text-3xl font-bold" style={{ color }}>
             {score}
           </span>

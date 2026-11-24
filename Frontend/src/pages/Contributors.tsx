@@ -113,7 +113,7 @@ export const Contributors: React.FC<ContributorsProps> = ({
         <button
           onClick={handleSyncContributors}
           disabled={isSyncing}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+          className="w-full sm:w-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
         >
           <RefreshCw className="h-4 w-4" />
           {isSyncing ? 'Synchronizing...' : 'Sync Contributors'}
@@ -200,7 +200,7 @@ export const Contributors: React.FC<ContributorsProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
             <table className="w-full min-w-[620px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#9ED4C8] bg-[#EAF8F3] text-xs font-semibold uppercase tracking-wide text-[#3F5F5C]">

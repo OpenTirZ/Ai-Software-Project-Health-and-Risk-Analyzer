@@ -20,6 +20,7 @@ interface TopBarProps {
   onSyncAll?: () => void;
   isSyncing?: boolean;
   onOpenMenu?: () => void;
+  isMenuOpen?: boolean;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -32,6 +33,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onSyncAll,
   isSyncing = false,
   onOpenMenu,
+  isMenuOpen = false,
 }) => {
   const getBreadcrumbTitle = () => {
     switch (currentView) {
@@ -89,7 +91,8 @@ export const TopBar: React.FC<TopBarProps> = ({
             type="button"
             onClick={onOpenMenu}
             aria-label="Open navigation menu"
-            className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-[#CDEFE6] hover:text-[#0B6B63] lg:hidden"
+            aria-expanded={isMenuOpen}
+            className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-[#CDEFE6] hover:text-[#0B6B63] md:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -98,16 +101,16 @@ export const TopBar: React.FC<TopBarProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('projects')}
-          className="shrink-0 font-medium text-slate-500 hover:text-[#0B6B63]"
+          className="hidden shrink-0 font-medium text-slate-500 hover:text-[#0B6B63] sm:inline-block"
         >
           Projects
         </button>
 
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-slate-400 sm:inline-block" />
 
         {isProjectSpecificView && activeProject && (
           <>
-            <div className="flex max-w-[180px] min-w-0 items-center gap-2 rounded-md border border-[#9ED4C8] bg-[#CDEFE6]/50 px-2.5 py-1.5 text-xs text-slate-700 sm:max-w-[220px]">
+            <div className="hidden max-w-[180px] min-w-0 items-center gap-2 rounded-md border border-[#9ED4C8] bg-[#CDEFE6]/50 px-2.5 py-1.5 text-xs text-slate-700 sm:flex sm:max-w-[220px]">
               <GitBranch className="h-3.5 w-3.5 shrink-0 text-[#0B6B63]" />
 
               <span className="truncate font-medium">
@@ -119,14 +122,14 @@ export const TopBar: React.FC<TopBarProps> = ({
               </span>
             </div>
 
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-slate-400 sm:inline-block" />
           </>
         )}
 
         {currentView === 'profile' && (
           <>
-            <span className="text-slate-500">Settings</span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+            <span className="hidden text-slate-500 sm:inline-block">Settings</span>
+            <ChevronRight className="hidden h-3.5 w-3.5 text-slate-400 sm:inline-block" />
           </>
         )}
 
@@ -162,7 +165,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               onChange={(e) =>
                 onSelectProject && onSelectProject(e.target.value)
               }
-              className="max-w-[140px] cursor-pointer rounded-md border border-[#9ED4C8] bg-white px-2 py-2 text-xs text-slate-700 outline-none focus:border-[#0B6B63] sm:max-w-[200px] sm:px-3"
+              className="max-w-[110px] truncate cursor-pointer rounded-md border border-[#9ED4C8] bg-white px-2 py-2 text-xs text-slate-700 outline-none focus:border-[#0B6B63] sm:max-w-[200px] sm:px-3"
             >
               {projects.length === 0 ? (
                 <option value="">No projects found</option>
