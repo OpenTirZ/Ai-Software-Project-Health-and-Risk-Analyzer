@@ -10,6 +10,9 @@ export type PageView =
   | 'contributors'
   | 'activity'
   | 'reports'
+  | 'appeals'
+  | 'settings'
+  | 'audit-logs'
   | 'profile';
 
 export interface UserProfileData {
@@ -91,4 +94,37 @@ export interface ReportItem {
   risksCount: number;
   bottlenecksCount: number;
   recommendations: string[];
+}
+
+export interface AppealItem {
+  id: string;
+  flagId: string;
+  repoName: string;
+  targetItem: string;
+  flagType: string;
+  developer: string;
+  developerEmail: string;
+  submittedAt: string;
+  reason: string;
+  mitigationPlan: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+}
+
+export interface AuditLogItem {
+  id: string;
+  timestamp: string;
+  actor: {
+    name: string;
+    email: string;
+    role: string;
+  };
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  status: 'SUCCESS' | 'WARNING' | 'FAILED';
+  details: string;
+  ipAddress?: string;
 }
