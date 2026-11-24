@@ -1,10 +1,11 @@
 import React from 'react';
-import type { PageView, UserProfileData } from '../types';
-import { ChevronRight, Bell, GitBranch } from 'lucide-react';
+import type { PageView, Repository, UserProfileData } from '../types';
+import { ChevronRight, Bell, GitBranch, Plus } from 'lucide-react';
 
 interface TopBarProps {
   currentView: PageView;
   selectedRepo: string;
+  repositories?: Repository[];
   currentUser?: UserProfileData;
   onSelectRepo: (repo: string) => void;
   onNavigate: (view: PageView) => void;
@@ -13,6 +14,7 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({
   currentView,
   selectedRepo,
+  repositories = [],
   currentUser,
   onSelectRepo,
   onNavigate,
@@ -27,8 +29,8 @@ export const TopBar: React.FC<TopBarProps> = ({
         return 'Connect Repository';
       case 'overview':
         return 'Project Overview';
-      case 'health-analysis':
-        return 'Health Analysis';
+      case 'dashboard':
+        return 'Health Dashboard';
       case 'risk-analysis':
         return 'Risk Analysis & Vulnerability';
       case 'contributors':
@@ -62,11 +64,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           onClick={() => onNavigate('projects')}
           className="text-slate-400 hover:text-slate-200 transition-colors font-medium cursor-pointer"
         >
-          Dashboard
+          Repositories
         </button>
         <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
         
-        {currentView !== 'projects' && currentView !== 'profile' && currentView !== 'create-project' && currentView !== 'connect-repo' && (
+        {currentView !== 'projects' && currentView !== 'profile' && currentView !== 'create-project' && currentView !== 'connect-repo' && selectedRepo && (
           <>
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800/50 border border-slate-700/50 text-slate-300 text-xs font-mono">
               <GitBranch className="w-3 h-3 text-indigo-400" />
@@ -90,19 +92,32 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right controls */}
       <div className="flex items-center gap-3">
-        {/* Repository selector */}
+        {/* Dynamic Repository selector */}
         {currentView !== 'projects' && currentView !== 'profile' && currentView !== 'create-project' && currentView !== 'connect-repo' && (
-          <select
-            value={selectedRepo}
-            onChange={(e) => onSelectRepo(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
-          >
-            <option value="core-api-service">core-api-service (main)</option>
-            <option value="payment-gateway">payment-gateway (staging)</option>
-            <option value="auth-microservice">auth-microservice (main)</option>
-            <option value="notification-service">notification-service (develop)</option>
-            <option value="data-pipeline">data-pipeline (main)</option>
-          </select>
+          repositories.length > 0 ? (
+            <select
+              value={selectedRepo}
+              onChange={(e) => {
+                onSelectRepo(e.target.value);
+                onNavigate('overview');
+              }}
+              className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              {repositories.map((r) => (
+                <option key={r.id} value={r.name}>
+                  {r.name} ({r.branch})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <button
+              onClick={() => onNavigate('create-project')}
+              className="inline-flex items-center gap-1 text-xs text-indigo-300 hover:text-white font-medium px-2.5 py-1 rounded bg-indigo-950/60 border border-indigo-700/60 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Connect Repo</span>
+            </button>
+          )
         )}
 
         <button 

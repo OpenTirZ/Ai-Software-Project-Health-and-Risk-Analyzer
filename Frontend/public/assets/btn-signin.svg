@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="322" height="67" viewBox="0 0 322 67" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Sign in">
+<use xlink:href="#stroke0_0_4" fill="#18EBE4"/>
+<use xlink:href="#stroke0_0_4" fill="#2E3B63"/>
+<use xlink:href="#stroke0_0_4" fill="#1B1795"/>
+</g>
+<defs>
+<path id="stroke0_0_4" d="M0 20C0 8.9543 8.95431 0 20 0H302C313.046 0 322 8.9543 322 20V47C322 58.0457 313.046 67 302 67H20C8.9543 67 0 58.0457 0 47V20Z"/>
+</defs>
+</svg>

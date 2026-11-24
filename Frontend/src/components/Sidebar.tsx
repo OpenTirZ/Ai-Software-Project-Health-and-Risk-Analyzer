@@ -3,7 +3,6 @@ import type { PageView, UserProfileData } from '../types';
 import { 
   FolderGit2, 
   LayoutDashboard, 
-  HeartPulse, 
   ShieldAlert, 
   Users, 
   Activity as ActivityIcon, 
@@ -22,8 +21,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNavigate, onLogout }) => {
   const navItems = [
     { id: 'projects', label: 'All Repositories', icon: FolderGit2 },
-    { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
-    { id: 'health-analysis', label: 'Health Analysis', icon: HeartPulse },
+    { id: 'overview', label: 'Project Overview', icon: FileText },
+    { id: 'dashboard', label: 'Health Dashboard', icon: LayoutDashboard },
     { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
     { id: 'contributors', label: 'Team and Contributors', icon: Users },
     { id: 'activity', label: 'Activity', icon: ActivityIcon },

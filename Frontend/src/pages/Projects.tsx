@@ -15,6 +15,14 @@ export const Projects: React.FC<ProjectsProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
+  const totalRepos = repositories.length;
+  const avgScore = totalRepos > 0
+    ? (repositories.reduce((acc, r) => acc + (r.healthScore || 0), 0) / totalRepos).toFixed(1)
+    : '—';
+  const flagCount = repositories.filter(
+    (r) => r.riskClassification === 'HIGH RISK' || r.riskClassification === 'ELEVATED CHURN'
+  ).length;
+
   const filteredRepos = repositories.filter(
     (repo) =>
       repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,10 +112,10 @@ export const Projects: React.FC<ProjectsProps> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-3xl font-bold text-slate-900">
-              8 Active
+              {totalRepos} Active
             </span>
             <span className="inline-flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-              100% Monitored
+              {totalRepos > 0 ? '100% Monitored' : '0% Monitored'}
             </span>
           </div>
         </div>
@@ -122,11 +130,13 @@ export const Projects: React.FC<ProjectsProps> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-3xl font-bold text-slate-900">
-              84.6 <span className="text-sm font-normal text-slate-400">/ 100</span>
+              {avgScore} {avgScore !== '—' && <span className="text-sm font-normal text-slate-400">/ 100</span>}
             </span>
-            <span className="inline-flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-              +3.1% ↑
-            </span>
+            {totalRepos > 0 && (
+              <span className="inline-flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                Healthy ↑
+              </span>
+            )}
           </div>
         </div>
 
@@ -140,7 +150,7 @@ export const Projects: React.FC<ProjectsProps> = ({
           </div>
           <div className="mt-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-slate-900">3</span>
+              <span className="text-2xl font-bold text-slate-900">{flagCount}</span>
               <span className="text-xs text-slate-500">Flags Raised</span>
             </div>
             <button
@@ -241,7 +251,7 @@ export const Projects: React.FC<ProjectsProps> = ({
                         }}
                         className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:text-indigo-900 group-hover:translate-x-0.5 transition-all cursor-pointer"
                       >
-                        <span>View Audit</span>
+                        <span>View Project Overview</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -249,8 +259,36 @@ export const Projects: React.FC<ProjectsProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400 text-sm">
-                    No repositories matched your search query.
+                  <td colSpan={6} className="py-14 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                        <GitBranch className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-base font-bold text-slate-800">
+                        {totalRepos === 0 ? 'No Repositories Connected' : 'No Repositories Matched'}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {totalRepos === 0 
+                          ? 'You have not connected any project repositories yet. Create your first project to enable real-time telemetry.'
+                          : 'No repositories matched your search query. Try clearing the filter.'}
+                      </p>
+                      {totalRepos === 0 ? (
+                        <button
+                          onClick={() => onNavigate('create-project')}
+                          className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-600/25 hover:bg-indigo-700 transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Create Project</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setSearchTerm('')}
+                          className="mt-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        >
+                          Clear Search
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}

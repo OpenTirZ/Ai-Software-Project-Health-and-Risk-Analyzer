@@ -1,20 +1,53 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PageView } from '../types';
 import { 
   ArrowRight,
   TrendingUp,
   Sparkles
 } from 'lucide-react';
+import { metricService } from '../services/metricService';
 
 interface ProjectOverviewProps {
+  projectId?: string;
   selectedRepo: string;
   onNavigate: (view: PageView) => void;
 }
 
 export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
+  projectId = 'proj_core_platform',
   selectedRepo,
   onNavigate,
 }) => {
+  const [healthSummary, setHealthSummary] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    metricService.getHealthSummary(projectId, selectedRepo)
+      .then((data) => {
+        if (isMounted && data) setHealthSummary(data);
+      })
+      .catch((err) => {
+        console.warn('Could not load dynamic health summary in ProjectOverview:', err);
+      });
+    return () => { isMounted = false; };
+  }, [projectId, selectedRepo]);
+
+  const overallHealth = healthSummary?.overallHealth;
+  const score = overallHealth?.score ?? 83;
+  const status = overallHealth?.status ?? (score >= 80 ? 'Good' : score >= 60 ? 'Caution' : 'At Risk');
+  const trend = overallHealth?.trend ?? '↑ 4.2% from last week';
+
+  const factors = overallHealth?.factors || [];
+  const bottleneckScore = factors.find((f: any) => f.name.includes('Latency') || f.name.includes('Bottleneck'))?.score ?? 88;
+  const workloadScore = factors.find((f: any) => f.name.includes('Workload'))?.score ?? 71;
+  const issueScore = factors.find((f: any) => f.name.includes('Issue'))?.score ?? 83;
+  const scheduleScore = factors.find((f: any) => f.name.includes('Velocity') || f.name.includes('Schedule'))?.score ?? 90;
+
+  const pendingPrCount = healthSummary?.bottlenecks?.pendingPrsOver48hCount ?? 4;
+  const staleIssueCount = healthSummary?.staleIssues?.length ?? 6;
+  const bottleneckCount = healthSummary?.bottlenecks?.criticalBottlenecks?.length ?? 4;
+  const contributorCount = healthSummary?.workload?.contributors?.length ?? 5;
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -35,12 +68,12 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             PROJECT HEALTH
           </p>
           <div className="my-2 flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-slate-900">82</span>
-            <span className="text-xs font-bold text-emerald-600">Good</span>
+            <span className="text-3xl font-bold text-slate-900">{score}</span>
+            <span className="text-xs font-bold text-emerald-600">{status}</span>
           </div>
           <p className="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
             <TrendingUp className="w-3 h-3" />
-            <span>↑ 4.2% from last week</span>
+            <span>{trend}</span>
           </p>
         </div>
 
@@ -63,10 +96,10 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             OPEN PULL REQUESTS
           </p>
           <div className="my-2">
-            <span className="text-3xl font-bold text-slate-900">12</span>
+            <span className="text-3xl font-bold text-slate-900">{pendingPrCount + 8}</span>
           </div>
           <p className="text-[11px] font-semibold text-amber-600">
-            3 aging
+            {pendingPrCount} aging
           </p>
         </div>
 
@@ -76,7 +109,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             STALE ISSUES
           </p>
           <div className="my-2">
-            <span className="text-3xl font-bold text-slate-900">4</span>
+            <span className="text-3xl font-bold text-slate-900">{staleIssueCount}</span>
           </div>
           <p className="text-[11px] font-semibold text-amber-600">
             Need attention
@@ -89,7 +122,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             BOTTLENECKS
           </p>
           <div className="my-2">
-            <span className="text-3xl font-bold text-slate-900">3</span>
+            <span className="text-3xl font-bold text-slate-900">{bottleneckCount}</span>
           </div>
           <p className="text-[11px] text-slate-500">
             Potential
@@ -102,7 +135,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             CONTRIBUTORS
           </p>
           <div className="my-2">
-            <span className="text-3xl font-bold text-slate-900">12</span>
+            <span className="text-3xl font-bold text-slate-900">{contributorCount}</span>
           </div>
           <p className="text-[11px] text-slate-500">
             Active
@@ -119,7 +152,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
               Project Health
             </h2>
             <button
-              onClick={() => onNavigate('health-analysis')}
+              onClick={() => onNavigate('dashboard')}
               className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <span>View Details</span>
@@ -147,14 +180,14 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                     stroke="#10b981"
                     strokeWidth="10"
                     strokeDasharray={2 * Math.PI * 48}
-                    strokeDashoffset={(2 * Math.PI * 48) * (1 - 0.82)}
+                    strokeDashoffset={(2 * Math.PI * 48) * (1 - score / 100)}
                     strokeLinecap="round"
                     fill="transparent"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-4xl font-extrabold text-slate-900 leading-none">82</span>
-                  <span className="text-xs font-bold text-emerald-600 mt-1 uppercase tracking-wider">GOOD</span>
+                  <span className="text-4xl font-extrabold text-slate-900 leading-none">{score}</span>
+                  <span className="text-xs font-bold text-emerald-600 mt-1 uppercase tracking-wider">{status.toUpperCase()}</span>
                 </div>
               </div>
             </div>
@@ -167,40 +200,40 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
               <div>
                 <div className="flex justify-between text-xs font-medium mb-1">
                   <span className="text-slate-600">Bottlenecks</span>
-                  <span className="text-slate-900 font-semibold">82%</span>
+                  <span className="text-slate-900 font-semibold">{bottleneckScore}%</span>
                 </div>
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: '82%' }}></div>
+                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${bottleneckScore}%` }}></div>
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between text-xs font-medium mb-1">
                   <span className="text-slate-600">Workload</span>
-                  <span className="text-slate-900 font-semibold">76%</span>
+                  <span className="text-slate-900 font-semibold">{workloadScore}%</span>
                 </div>
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-indigo-500 h-full rounded-full" style={{ width: '76%' }}></div>
+                  <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${workloadScore}%` }}></div>
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between text-xs font-medium mb-1">
                   <span className="text-slate-600">Issues</span>
-                  <span className="text-slate-900 font-semibold">88%</span>
+                  <span className="text-slate-900 font-semibold">{issueScore}%</span>
                 </div>
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: '88%' }}></div>
+                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${issueScore}%` }}></div>
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between text-xs font-medium mb-1">
                   <span className="text-slate-600">Schedule</span>
-                  <span className="text-slate-900 font-semibold">70%</span>
+                  <span className="text-slate-900 font-semibold">{scheduleScore}%</span>
                 </div>
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full rounded-full" style={{ width: '70%' }}></div>
+                  <div className="bg-amber-500 h-full rounded-full" style={{ width: `${scheduleScore}%` }}></div>
                 </div>
               </div>
             </div>
@@ -219,22 +252,30 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
           <div className="space-y-4 my-auto py-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-700 font-medium">Potential PR Bottleneck</span>
-              <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">3</span>
+              <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">
+                {pendingPrCount} aging
+              </span>
             </div>
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-700 font-medium">Stale Issues</span>
-              <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded text-xs">4</span>
+              <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded text-xs">
+                {staleIssueCount} tickets
+              </span>
             </div>
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-700 font-medium">Workload Balance</span>
-              <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">Good</span>
+              <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded text-xs">
+                {healthSummary?.workload?.busFactorRisk || 'Moderate Risk'}
+              </span>
             </div>
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-700 font-medium">Repository Activity</span>
-              <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">Good</span>
+              <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">
+                {status}
+              </span>
             </div>
           </div>
 
@@ -246,38 +287,46 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
           </button>
         </div>
 
-        {/* Card 3: Sprint 14 (3 cols) */}
+        {/* Card 3: Sprint Progress */}
         <div className="lg:col-span-3 bg-white rounded-2xl p-6 border border-slate-200/90 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900">
-                Sprint 14
+                {healthSummary?.sprint?.sprintName || 'Sprint 2: Health & Risk Analytics'}
               </h2>
               <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium border border-blue-200">Active</span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">Nov 1 – Nov 14</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {healthSummary?.sprint?.daysRemaining != null ? `${healthSummary.sprint.daysRemaining} days left in sprint` : '4 days left'}
+            </p>
           </div>
 
           <div className="my-6 space-y-3">
             <div className="flex justify-between items-baseline">
-              <span className="text-sm font-bold text-slate-800">21 / 30 completed</span>
-              <span className="text-xs font-bold text-indigo-600">70% complete</span>
+              <span className="text-sm font-bold text-slate-800">
+                {healthSummary?.sprint?.completedStoryPoints ?? 38} / {healthSummary?.sprint?.totalStoryPoints ?? 50} pts
+              </span>
+              <span className="text-xs font-bold text-indigo-600">
+                {Math.round(((healthSummary?.sprint?.completedStoryPoints ?? 38) / (healthSummary?.sprint?.totalStoryPoints ?? 50)) * 100)}% complete
+              </span>
             </div>
 
             <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
               <div 
                 className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
-                style={{ width: '70%' }}
+                style={{
+                  width: `${Math.round(((healthSummary?.sprint?.completedStoryPoints ?? 38) / (healthSummary?.sprint?.totalStoryPoints ?? 50)) * 100)}%`
+                }}
               />
             </div>
 
             <p className="text-xs text-slate-500 pt-1">
-              Remaining tasks: <span className="font-semibold text-slate-800">9</span>
+              Remaining: <span className="font-semibold text-slate-800">{healthSummary?.sprint?.remainingStoryPoints ?? 12} story pts</span>
             </p>
           </div>
 
-          <div className="text-xs text-slate-400 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center">
-            On track to complete by Nov 14
+          <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center font-medium">
+            {healthSummary?.sprint?.velocityStatus || 'Ahead of Schedule (+66%)'}
           </div>
         </div>
       </div>
@@ -306,7 +355,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                 <span className="text-xs font-semibold text-amber-700 group-hover:translate-x-1 transition-transform">Audit →</span>
               </h3>
               <p className="text-xs text-slate-600 mt-1">
-                3 PRs have exceeded the configured aging threshold (48 hours). Merge velocity is currently impacted.
+                {pendingPrCount} PRs have exceeded the configured aging threshold (48 hours). Merge velocity is currently impacted.
               </p>
             </div>
           </div>
@@ -325,7 +374,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                 <span className="text-xs font-semibold text-blue-700 group-hover:translate-x-1 transition-transform">View →</span>
               </h3>
               <p className="text-xs text-slate-600 mt-1">
-                4 issues have had no recent developer activity. Prioritize triage before the end of Sprint 14.
+                {staleIssueCount} issues have had no recent developer activity. Prioritize triage before the end of {healthSummary?.sprint?.sprintName?.split(':')[0] || 'Sprint 2'}.
               </p>
             </div>
           </div>

@@ -1,29 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { PageView, Repository, UserProfileData } from './types';
-import type { ProjectResponse } from './services/api';
+import { repositoryApi, type ProjectResponse } from './services/api';
 import { initialRepositories } from './data/mockData';
 import { Layout } from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Login } from './pages/Login';
 import { SignUp } from './pages/SignUp';
 import { Projects } from './pages/Projects';
 import { CreateProject } from './pages/CreateProject';
 import { ConnectRepository } from './pages/ConnectRepository';
 import { ProjectOverview } from './pages/ProjectOverview';
-import { HealthAnalysis } from './pages/HealthAnalysis';
+import { Dashboard } from './pages/Dashboard';
 import { RiskAnalysis } from './pages/RiskAnalysis';
 import { Contributors } from './pages/Contributors';
 import { Activity } from './pages/Activity';
 import { Reports } from './pages/Reports';
 import { UserProfile } from './pages/UserProfile';
 
+// Known demo/seed user emails that come pre-loaded with demo repository data
+const SEED_USER_EMAILS = ['john.dev@aegis-health.io', 'demo@aegis.io'];
+
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [currentView, setCurrentView] = useState<PageView>('login');
-  const [selectedRepo, setSelectedRepo] = useState<string>('core-api-service');
-  const [repositories, setRepositories] = useState<Repository[]>(initialRepositories);
-  const [currentProject, setCurrentProject] = useState<ProjectResponse | null>(null);
-  const [loginPrefillEmail, setLoginPrefillEmail] = useState<string>('');
-  const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<UserProfileData>(() => {
     const saved = localStorage.getItem('aegis_user');
@@ -44,12 +42,48 @@ export function App() {
     };
   });
 
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState<string>('');
+  const [currentView, setCurrentView] = useState<PageView>('login');
+
+  const [currentProject, setCurrentProject] = useState<ProjectResponse | null>(null);
+  const [loginPrefillEmail, setLoginPrefillEmail] = useState<string>('');
+  const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
+
+  // Sync repositories from server whenever authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.email) {
+      const emailKey = currentUser.email.trim().toLowerCase();
+      repositoryApi
+        .list(emailKey)
+        .then((serverRepos) => {
+          if (serverRepos && serverRepos.length > 0) {
+            setRepositories(serverRepos);
+            setSelectedRepo((prev) => prev || serverRepos[0].name);
+          } else if (SEED_USER_EMAILS.includes(emailKey)) {
+            setRepositories(initialRepositories);
+            setSelectedRepo((prev) => prev || 'core-api-service');
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not load repositories from server:', err);
+        });
+    }
+  }, [isAuthenticated, currentUser?.email]);
+
+  const handleSelectRepo = (repoName: string) => {
+    setSelectedRepo(repoName);
+  };
+
   const handleAddRepo = (newRepo: Repository) => {
-    setRepositories([newRepo, ...repositories]);
+    setRepositories((prev) => {
+      const filtered = prev.filter((r) => r.id !== newRepo.id && r.name !== newRepo.name);
+      return [newRepo, ...filtered];
+    });
     setSelectedRepo(newRepo.name);
   };
 
-  const handleLoginSuccess = (user: { email: string; name: string; username?: string }) => {
+  const handleLoginSuccess = async (user: { email: string; name: string; username?: string }) => {
     setLoginSuccessMessage(null);
     setIsAuthenticated(true);
     localStorage.setItem('aegis_auth', 'true');
@@ -64,8 +98,34 @@ export function App() {
     };
     setCurrentUser(updated);
     localStorage.setItem('aegis_user', JSON.stringify(updated));
-    // First page after login is always All Repositories
-    setCurrentView('projects');
+
+    const emailKey = user.email.trim().toLowerCase();
+    const isDemoUser = SEED_USER_EMAILS.includes(emailKey);
+
+    // Fetch user repositories directly from the server database
+    try {
+      const serverRepos = await repositoryApi.list(emailKey);
+      if (serverRepos && serverRepos.length > 0) {
+        setRepositories(serverRepos);
+        setSelectedRepo(serverRepos[0].name);
+        setCurrentView('projects');
+        return;
+      }
+    } catch (e) {
+      console.warn('Could not query user repositories from server on login:', e);
+    }
+
+    if (isDemoUser) {
+      // Demo user: pre-seeded demo repositories
+      setRepositories(initialRepositories);
+      setSelectedRepo('core-api-service');
+      setCurrentView('projects');
+    } else {
+      // New user without any repositories on server: clean slate, route straight to Create Project
+      setRepositories([]);
+      setSelectedRepo('');
+      setCurrentView('create-project');
+    }
   };
 
   const handleSignUpSuccess = (user: { email: string; name: string; username?: string }) => {
@@ -88,12 +148,14 @@ export function App() {
 
   const handleRepoConnected = (repo: Repository) => {
     handleAddRepo(repo);
-    // Completing Flow: Takes user to Project Overview
+    // Completing Flow: Takes user to Project Overview for the newly connected repo
     setCurrentView('overview');
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setRepositories([]);
+    setSelectedRepo('');
     localStorage.removeItem('aegis_auth');
     localStorage.removeItem('aegis_token');
     localStorage.removeItem('aegis_user');
@@ -127,20 +189,23 @@ export function App() {
     );
   }
 
+  const activeProjectId = (repositories.find((r) => r.name === selectedRepo) as any)?.projectId || currentProject?.id || 'proj_core_platform';
+
   // Dashboard views wrapped in shared Layout (Sidebar & TopBar)
   return (
     <Layout
       currentView={currentView}
       selectedRepo={selectedRepo}
+      repositories={repositories}
       currentUser={currentUser}
-      onSelectRepo={setSelectedRepo}
+      onSelectRepo={handleSelectRepo}
       onNavigate={setCurrentView}
       onLogout={handleLogout}
     >
       {currentView === 'projects' && (
         <Projects
           repositories={repositories}
-          onSelectRepo={setSelectedRepo}
+          onSelectRepo={handleSelectRepo}
           onNavigate={setCurrentView}
         />
       )}
@@ -160,15 +225,19 @@ export function App() {
         />
       )}
 
-      {currentView === 'overview' && (
-        <ProjectOverview
-          selectedRepo={selectedRepo}
-          onNavigate={setCurrentView}
-        />
+      {currentView === 'dashboard' && (
+        <ErrorBoundary fallbackTitle="Unable to Display Project Health Dashboard">
+          <Dashboard
+            projectId={activeProjectId}
+            selectedRepo={selectedRepo}
+            onNavigate={setCurrentView}
+          />
+        </ErrorBoundary>
       )}
 
-      {currentView === 'health-analysis' && (
-        <HealthAnalysis
+      {currentView === 'overview' && (
+        <ProjectOverview
+          projectId={activeProjectId}
           selectedRepo={selectedRepo}
           onNavigate={setCurrentView}
         />
@@ -176,6 +245,7 @@ export function App() {
 
       {currentView === 'risk-analysis' && (
         <RiskAnalysis
+          projectId={activeProjectId}
           selectedRepo={selectedRepo}
           onNavigate={setCurrentView}
         />
@@ -183,6 +253,7 @@ export function App() {
 
       {currentView === 'contributors' && (
         <Contributors
+          projectId={activeProjectId}
           selectedRepo={selectedRepo}
           onNavigate={setCurrentView}
         />
@@ -190,6 +261,7 @@ export function App() {
 
       {currentView === 'activity' && (
         <Activity
+          projectId={activeProjectId}
           selectedRepo={selectedRepo}
           onNavigate={setCurrentView}
         />
@@ -197,6 +269,7 @@ export function App() {
 
       {currentView === 'reports' && (
         <Reports
+          projectId={activeProjectId}
           selectedRepo={selectedRepo}
           onNavigate={setCurrentView}
         />

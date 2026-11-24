@@ -5,7 +5,7 @@ export type PageView =
   | 'create-project'
   | 'connect-repo'
   | 'overview'
-  | 'health-analysis'
+  | 'dashboard'
   | 'risk-analysis'
   | 'contributors'
   | 'activity'

@@ -1,41 +1,103 @@
-import React, { useState } from 'react';
-import type { PageView } from '../types';
-import { reportsData } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
+import type { PageView, ReportItem } from '../types';
 import { Plus, Download, Eye, CheckCircle, Sparkles, X } from 'lucide-react';
+import { metricService } from '../services/metricService';
 
 interface ReportsProps {
+  projectId?: string;
   selectedRepo: string;
   onNavigate: (view: PageView) => void;
 }
 
-export const Reports: React.FC<ReportsProps> = ({ selectedRepo }) => {
-  const [reports, setReports] = useState(reportsData);
-  const [selectedReport, setSelectedReport] = useState(reportsData[0]);
+export const Reports: React.FC<ReportsProps> = ({ 
+  projectId = 'proj_core_platform', 
+  selectedRepo,
+}) => {
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [healthSummary, setHealthSummary] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    metricService.getHealthSummary(projectId, selectedRepo)
+      .then((data) => {
+        if (!isMounted || !data) return;
+        setHealthSummary(data);
+
+        const score = data.overallHealth?.score ?? 84;
+        const pendingCount = data.bottlenecks?.pendingPrsOver48hCount ?? 1;
+        const staleCount = (data.staleIssues || []).filter((i: any) => i.daysInactive >= 14).length;
+        const totalRisks = (pendingCount > 0 ? 1 : 0) + (staleCount > 0 ? 1 : 0) + (score < 80 ? 2 : 1);
+
+        const defaultRecommendations: string[] = [];
+        if (pendingCount > 0) {
+          defaultRecommendations.push(`Review and unblock ${pendingCount} aging pull requests pending >48h`);
+        }
+        if (staleCount > 0) {
+          defaultRecommendations.push(`Triage ${staleCount} dormant issues with inactivity over 14 days`);
+        }
+        if (data.workload?.busFactorRisk !== 'Low Risk') {
+          defaultRecommendations.push(`Knowledge transfer recommended: address ${data.workload?.busFactorRisk || 'workload concentration'}`);
+        }
+        defaultRecommendations.push(`Monitor CI/CD pipeline and maintain automated test suite`);
+
+        const initialReport: ReportItem = {
+          id: `rep_${selectedRepo}_init`,
+          title: 'PROJECT HEALTH AUDIT REPORT',
+          project: `${selectedRepo} (Mainline)`,
+          generatedDate: new Date().toLocaleDateString('en-US', {
+            month: 'short',
+            day: '2-digit',
+            year: 'numeric',
+          }),
+          healthScore: score,
+          risksCount: totalRisks,
+          bottlenecksCount: pendingCount,
+          recommendations: defaultRecommendations,
+        };
+
+        setReports([initialReport]);
+        setSelectedReport(initialReport);
+      })
+      .catch((err) => {
+        console.warn('Could not load dynamic summary for Reports:', err);
+      });
+
+    return () => { isMounted = false; };
+  }, [projectId, selectedRepo]);
 
   const handleGenerateReport = () => {
     setGenerating(true);
     setTimeout(() => {
-      const newReport = {
+      const score = healthSummary?.overallHealth?.score ?? 84;
+      const pendingCount = healthSummary?.bottlenecks?.pendingPrsOver48hCount ?? 1;
+      const staleCount = (healthSummary?.staleIssues || []).filter((i: any) => i.daysInactive >= 14).length;
+      const totalRisks = (pendingCount > 0 ? 1 : 0) + (staleCount > 0 ? 1 : 0) + (score < 80 ? 2 : 1);
+
+      const dynamicRecommendations: string[] = [
+        `Rebase active branch on main before next release`,
+        `Address review turnaround time (currently ${healthSummary?.bottlenecks?.avgReviewLatencyHours || 18}h avg)`,
+        `Sprint progress: ${healthSummary?.sprint?.completedStoryPoints || 30}/${healthSummary?.sprint?.totalStoryPoints || 40} story points burned`,
+      ];
+
+      const newReport: ReportItem = {
         id: Date.now().toString(),
-        title: 'PROJECT HEALTH AUDIT REPORT',
-        project: selectedRepo,
+        title: 'ON-DEMAND HEALTH & RISK AUDIT',
+        project: `${selectedRepo} (${healthSummary?.branch || 'main'})`,
         generatedDate: new Date().toLocaleDateString('en-US', {
           month: 'short',
           day: '2-digit',
           year: 'numeric',
         }),
-        healthScore: 84,
-        risksCount: 2,
-        bottlenecksCount: 2,
-        recommendations: [
-          'Immediate rebase on main branch recommended',
-          'Automated CI build times stabilized under 4 minutes',
-          'Zero critical CVEs discovered in container images',
-        ],
+        healthScore: score,
+        risksCount: totalRisks,
+        bottlenecksCount: pendingCount,
+        recommendations: dynamicRecommendations,
       };
-      setReports([newReport, ...reports]);
+
+      setReports((prev) => [newReport, ...prev]);
       setSelectedReport(newReport);
       setGenerating(false);
     }, 900);
@@ -180,7 +242,7 @@ export const Reports: React.FC<ReportsProps> = ({ selectedRepo }) => {
       </div>
 
       {/* Report Details Modal */}
-      {showViewModal && (
+      {showViewModal && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">

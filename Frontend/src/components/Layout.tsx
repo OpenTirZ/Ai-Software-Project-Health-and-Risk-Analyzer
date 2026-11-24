@@ -1,11 +1,12 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
-import type { PageView, UserProfileData } from '../types';
+import type { PageView, Repository, UserProfileData } from '../types';
 
 interface LayoutProps {
   currentView: PageView;
   selectedRepo: string;
+  repositories?: Repository[];
   currentUser?: UserProfileData;
   onSelectRepo: (repo: string) => void;
   onNavigate: (view: PageView) => void;
@@ -16,6 +17,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({
   currentView,
   selectedRepo,
+  repositories = [],
   currentUser,
   onSelectRepo,
   onNavigate,
@@ -37,6 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({
         <TopBar 
           currentView={currentView} 
           selectedRepo={selectedRepo} 
+          repositories={repositories}
           currentUser={currentUser}
           onSelectRepo={onSelectRepo} 
           onNavigate={onNavigate} 

@@ -2,6 +2,8 @@
 // Fully integrated with both the included server (http://localhost:5000/api) and FastAPI backend
 // Strict live connection mode: Network failures will surface actionable error messages directly in the UI.
 
+import type { Repository } from '../types';
+
 export interface User {
   id: string;
   name: string;
@@ -41,6 +43,8 @@ export interface RepositoryPayload {
   projectId: string;
   githubUrl: string;
   branch?: string;
+  userId?: string;
+  userEmail?: string;
 }
 
 export interface RepositoryResponse {
@@ -60,9 +64,15 @@ export interface ApiError {
 }
 
 // ---------------------------------------------------------------------------
-// URL & Environment Resolution
+// URL & Environment Resolution (Supports any host, domain, container, or port)
 // ---------------------------------------------------------------------------
-const RAW_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const RAW_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== 'undefined' && window.location.port === '5173'
+    ? 'http://localhost:5000/api'
+    : typeof window !== 'undefined' && window.location.origin
+    ? `${window.location.origin}/api`
+    : 'http://localhost:5000/api');
 const CLEAN_URL = RAW_URL.replace(/\/+$/, '');
 // API_BASE_URL points to the /api base (e.g. http://localhost:5000/api)
 export const API_BASE_URL = CLEAN_URL.endsWith('/api') ? CLEAN_URL : `${CLEAN_URL}/api`;
@@ -637,10 +647,23 @@ export const repositoryApi = {
 
     try {
       const token = localStorage.getItem('aegis_token');
+      const savedUserStr = localStorage.getItem('aegis_user');
+      let currentEmail = '';
+      let currentUid = '';
+      if (savedUserStr) {
+        try {
+          const parsed = JSON.parse(savedUserStr);
+          currentEmail = parsed.email || '';
+          currentUid = parsed.id || '';
+        } catch {}
+      }
+
       const requestBody = JSON.stringify({
         projectId: payload.projectId,
         githubUrl: payload.githubUrl.trim(),
         branch: payload.branch || 'main',
+        userId: payload.userId || currentUid,
+        userEmail: payload.userEmail || currentEmail,
       });
 
       // Primary: POST /api/repositories/connect (matching Sprint 1 spec & included server)
@@ -714,10 +737,55 @@ export const repositoryApi = {
   },
 
   /**
-   * Fetch branches directly from GitHub REST API
+   * Fetch branches from repository via backend service (with fallback to direct GitHub REST API)
    */
   async fetchBranches(githubUrl: string): Promise<{ branches: string[]; source: 'github' | 'default' }> {
     const cleanUrl = githubUrl.trim().replace(/\/+$/, '');
+    if (!cleanUrl) {
+      return { branches: ['main', 'master', 'develop'], source: 'default' };
+    }
+
+    // Retrieve potential GitHub PAT from local storage (ensuring Aegis JWT is never forwarded as a GitHub token)
+    const ghTokenCandidate = localStorage.getItem('github_token');
+    const isGhPat =
+      ghTokenCandidate &&
+      !ghTokenCandidate.startsWith('jwt_') &&
+      !ghTokenCandidate.startsWith('eyJ') &&
+      ghTokenCandidate.split('.').length !== 3 &&
+      ghTokenCandidate.trim().length >= 10;
+    const ghPat = isGhPat ? ghTokenCandidate.trim() : null;
+
+    // 1. Primary: Attempt fetching via Backend branches endpoint
+    try {
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (ghPat) {
+        headers['x-github-token'] = ghPat;
+      }
+
+      let response = await fetch(`${API_BASE_URL}/repositories/branches?url=${encodeURIComponent(cleanUrl)}`, {
+        headers,
+      });
+
+      if (response.status === 404 && ROOT_URL !== API_BASE_URL) {
+        const altResponse = await fetch(`${ROOT_URL}/repositories/branches?url=${encodeURIComponent(cleanUrl)}`, {
+          headers,
+        });
+        if (altResponse.ok) {
+          response = altResponse;
+        }
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.branches) && data.branches.length > 0) {
+          return { branches: data.branches, source: data.source || 'github' };
+        }
+      }
+    } catch (err) {
+      console.warn('Backend branch endpoint query failed, attempting direct GitHub fallback.', err);
+    }
+
+    // 2. Direct GitHub REST API fallback
     const match = cleanUrl.match(/github\.com\/([^/]+)\/([^/]+)/i);
     if (!match) {
       return { branches: ['main', 'master', 'develop'], source: 'default' };
@@ -727,8 +795,13 @@ export const repositoryApi = {
     const repo = match[2].replace(/\.git$/, '');
 
     try {
+      const ghHeaders: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
+      if (ghPat) {
+        ghHeaders.Authorization = ghPat.startsWith('token ') || ghPat.startsWith('Bearer ') ? ghPat : `token ${ghPat}`;
+      }
+
       const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=50`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
+        headers: ghHeaders,
       });
 
       if (response.ok) {
@@ -744,4 +817,41 @@ export const repositoryApi = {
 
     return { branches: ['main', 'master', 'develop', 'staging', 'production'], source: 'default' };
   },
+
+  /**
+   * Fetch all repositories for the current user directly from the server API
+   */
+  async list(userEmail?: string): Promise<Repository[]> {
+    const token = localStorage.getItem('aegis_token');
+    const query = userEmail ? `?userEmail=${encodeURIComponent(userEmail)}` : '';
+    try {
+      const response = await fetch(`${API_BASE_URL}/repositories${query}`, {
+        headers: {
+          Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : (data.repositories || []);
+        return list.map((r: any) => ({
+          id: String(r.id || r._id),
+          name: r.name || r.repoName || 'repository',
+          branch: r.branch || 'main',
+          healthScore: typeof r.healthScore === 'number' ? r.healthScore : 88,
+          riskClassification: (r.riskClassification as any) || 'LOW RISK',
+          lastAudit: r.lastAudit || 'Just now',
+          description: r.description || `Repository on branch ${r.branch || 'main'}`,
+          monitored: r.monitored !== false,
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch repositories from server:', err);
+    }
+    return [];
+  },
 };
+
+// Re-export metricService for universal imports
+export { metricService } from './metricService';
+
