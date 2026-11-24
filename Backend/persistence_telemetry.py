@@ -20,12 +20,19 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from bson import ObjectId
-from pymongo.errors import PyMongoError
+from pymongo import UpdateOne
+from pymongo.errors import (
+    BulkWriteError,
+    ConnectionFailure,
+    PyMongoError,
+    ServerSelectionTimeoutError,
+)
 
 from Backend.database import (
     issues_collection,
     metric_snapshots_collection,
     milestones_collection,
+    projects_collection,
     pull_requests_collection,
 )
 from Backend.persistence import (
@@ -106,6 +113,143 @@ def upsert_pull_request(
     except PyMongoError as exc:
         logger.error("Failed to upsert PR #%s for project %s: %s", pr_number, project_id, exc)
         raise DatabaseError(f"Database error during pull request upsert: {exc}") from exc
+
+
+def bulk_upsert_pull_requests(
+    project_id: Union[str, ObjectId],
+    pull_requests: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    """
+    Insert or update many synchronized GitHub pull requests in ONE database batch call.
+
+    Preserves project write protection, compound uniqueness on (projectId, number),
+    and lifecycle reconciliation.
+
+    Args:
+        project_id: Project ObjectId (string or ObjectId).
+        pull_requests: List of normalized PR dicts. Each must contain 'number' or 'pr_number'.
+
+    Returns:
+        dict with 'matched_count', 'modified_count', and 'upserted_count'.
+
+    Raises:
+        ValueError: If project_id is invalid or a PR has no number.
+        DatabaseError: On connectivity, driver, or bulk-write failure.
+    """
+    if not project_id or not str(project_id).strip():
+        raise ValueError("project_id is required.")
+
+    if not pull_requests:
+        return {"matched_count": 0, "modified_count": 0, "upserted_count": 0}
+
+    _check_project_writable(project_id)
+
+    project_oid = to_object_id(project_id)
+    synced_at = datetime.now(timezone.utc)
+    operations = []
+
+    # Map existing PRs for safe restoration if lifecycle transition occurs during bulk write
+    existing_prs = {}
+    pr_numbers = [
+        int(p.get("number") or p.get("pr_number"))
+        for p in pull_requests
+        if p.get("number") is not None or p.get("pr_number") is not None
+    ]
+    if pr_numbers:
+        try:
+            cursor = pull_requests_collection.find(
+                {"projectId": project_oid, "number": {"$in": pr_numbers}}
+            )
+            for doc in cursor:
+                existing_prs[doc["number"]] = doc
+        except Exception as e:
+            logger.warning("Could not pre-fetch existing PRs for reconciliation: %s", e)
+
+    for pr_data in pull_requests:
+        if "number" not in pr_data and "pr_number" not in pr_data:
+            raise ValueError("Pull request data must contain a 'number' or 'pr_number' field.")
+
+        pr_number = int(pr_data.get("number") or pr_data.get("pr_number"))
+
+        filter_query = {
+            "projectId": project_oid,
+            "number": pr_number,
+        }
+
+        reviews = pr_data.get("reviews", [])
+        reviews_count = pr_data.get("reviews_count")
+        if reviews_count is None:
+            reviews_count = len(reviews) if isinstance(reviews, list) else 0
+
+        update_fields = {
+            "projectId": project_oid,
+            "number": pr_number,
+            "title": pr_data.get("title", "Untitled PR"),
+            "state": str(pr_data.get("state", "open")).lower(),
+            "author": pr_data.get("author", "Unknown"),
+            "github_username": pr_data.get("github_username") or (
+                pr_data.get("author") if isinstance(pr_data.get("author"), str) else None
+            ),
+            "created_at": pr_data.get("created_at") or pr_data.get("createdAt"),
+            "updated_at": pr_data.get("updated_at") or pr_data.get("updatedAt"),
+            "closed_at": pr_data.get("closed_at") or pr_data.get("closedAt"),
+            "merged_at": pr_data.get("merged_at") or pr_data.get("mergedAt"),
+            "requested_reviewers": pr_data.get("requested_reviewers", []),
+            "reviews": reviews,
+            "reviews_count": reviews_count,
+            "open_duration_hours": pr_data.get("open_duration_hours", 0.0),
+            "additions": pr_data.get("additions", 0),
+            "deletions": pr_data.get("deletions", 0),
+            "html_url": pr_data.get("html_url") or pr_data.get("url", ""),
+            "repository": pr_data.get("repository"),
+            "repository_url": pr_data.get("repository_url"),
+            "last_synced_at": synced_at,
+        }
+
+        operations.append(
+            UpdateOne(
+                filter_query,
+                {"$set": update_fields},
+                upsert=True,
+            )
+        )
+
+    try:
+        result = pull_requests_collection.bulk_write(operations, ordered=False)
+    except BulkWriteError as exc:
+        logger.error("Bulk write failed during bulk_upsert_pull_requests: %s", exc.details)
+        raise DatabaseError(f"A database error occurred while saving pull requests: {exc}") from exc
+    except (ConnectionFailure, ServerSelectionTimeoutError) as exc:
+        logger.error("Database unreachable during bulk_upsert_pull_requests: %s", exc)
+        raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
+    except PyMongoError as exc:
+        logger.error("Database error during bulk_upsert_pull_requests: %s", exc)
+        raise DatabaseError(f"A database error occurred while saving pull requests: {exc}") from exc
+
+    # Post-write reconciliation: check if lifecycle state transitioned during write
+    post = projects_collection.find_one(
+        {"_id": project_oid},
+        {"status": 1, "is_active": 1, "deletion_status": 1}
+    )
+    if (
+        not post
+        or post.get("status") in ("archived", "deleted")
+        or post.get("is_active") is False
+        or post.get("deletion_status") in ("pending", "completed")
+    ):
+        for pr_item in pull_requests:
+            num = int(pr_item.get("number") or pr_item.get("pr_number"))
+            if num in existing_prs:
+                pull_requests_collection.replace_one({"_id": existing_prs[num]["_id"]}, existing_prs[num])
+            else:
+                pull_requests_collection.delete_one({"projectId": project_oid, "number": num})
+        raise DatabaseError("Project transitioned during synchronization. Pull requests batch reconciled.")
+
+    return {
+        "matched_count": result.matched_count,
+        "modified_count": result.modified_count,
+        "upserted_count": result.upserted_count,
+    }
 
 
 def get_project_prs(

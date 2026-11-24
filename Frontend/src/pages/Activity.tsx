@@ -27,10 +27,12 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const loadTabData = async (projectId: string, tab: ActivityTab) => {
     setIsLoading(true);
+    setLoadError(null);
 
     try {
       if (tab === 'commits') {
@@ -45,6 +47,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
       }
     } catch (err: any) {
       console.warn(`Could not load ${tab}:`, err);
+      setLoadError(err?.message || `Failed to load ${tab.replace('-', ' ')} telemetry.`);
     } finally {
       setIsLoading(false);
     }
@@ -259,6 +262,16 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
           className="rounded-lg border border-[#9ED4C8] bg-white px-4 py-3 text-sm text-[#3F5F5C]"
         >
           {syncFeedback}
+        </div>
+      )}
+
+      {loadError && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-[#CC1F2E]/30 bg-[#CC1F2E]/5 px-4 py-3 text-sm text-[#CC1F2E]"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{loadError}</span>
         </div>
       )}
 
