@@ -24,6 +24,7 @@ from Backend.database import (
     milestones_collection,
     metric_snapshots_collection,
     report_schedules_collection,
+    appeals_collection,
 )
 
 logger = logging.getLogger(__name__)
@@ -1035,3 +1036,65 @@ def soft_delete_complete(project_id):
         raise DatabaseError("Database is temporarily unavailable. Please try again later.") from exc
     except PyMongoError as exc:
         raise DatabaseError("A database error occurred completing soft-delete.") from exc
+
+
+# --------------------------------------------------
+# APPEALS
+# --------------------------------------------------
+
+def create_appeal(appeal_data):
+    """Insert an appeal and return its MongoDB ID as a string."""
+    try:
+        result = appeals_collection.insert_one(appeal_data)
+        return str(result.inserted_id)
+    except PyMongoError as exc:
+        logger.error("Database error while creating appeal: %s", exc)
+        raise DatabaseError("A database error occurred while creating the appeal.") from exc
+
+
+def get_appeal(appeal_id):
+    """Retrieve one appeal by ID."""
+    try:
+        document = appeals_collection.find_one({"_id": to_object_id(appeal_id)})
+        return serialize_document(document)
+    except PyMongoError as exc:
+        logger.error("Database error while retrieving appeal: %s", exc)
+        raise DatabaseError("A database error occurred while retrieving the appeal.") from exc
+
+
+def get_project_appeals(project_id):
+    """Retrieve all appeals for a project, newest first."""
+    try:
+        documents = appeals_collection.find(
+            {"projectId": to_object_id(project_id)}
+        ).sort("submittedAt", -1)
+        return [serialize_document(document) for document in documents]
+    except PyMongoError as exc:
+        logger.error("Database error while listing project appeals: %s", exc)
+        raise DatabaseError("A database error occurred while listing project appeals.") from exc
+
+
+def update_appeal(appeal_id, update_data, expected_status=None):
+    """Update an appeal, optionally using a status guard for atomic review."""
+    try:
+        query = {"_id": to_object_id(appeal_id)}
+        if expected_status is not None:
+            query["status"] = expected_status
+        result = appeals_collection.update_one(query, {"$set": update_data})
+        return result.modified_count > 0
+    except PyMongoError as exc:
+        logger.error("Database error while updating appeal: %s", exc)
+        raise DatabaseError("A database error occurred while updating the appeal.") from exc
+
+
+def get_approved_appeal_flag_ids(project_id):
+    """Return flag IDs with approved appeals for the specified project."""
+    try:
+        documents = appeals_collection.find(
+            {"projectId": to_object_id(project_id), "status": "approved"},
+            {"flagId": 1, "_id": 0},
+        )
+        return {document["flagId"] for document in documents if document.get("flagId")}
+    except PyMongoError as exc:
+        logger.error("Database error while retrieving approved appeal flags: %s", exc)
+        raise DatabaseError("A database error occurred while retrieving approved appeal flags.") from exc

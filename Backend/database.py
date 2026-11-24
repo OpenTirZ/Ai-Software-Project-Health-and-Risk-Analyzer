@@ -69,6 +69,7 @@ contributors_collection = db["contributors"]
 milestones_collection = db["milestones"]
 metric_snapshots_collection = db["metric_snapshots"]
 report_schedules_collection = db["report_schedules"]
+appeals_collection = db["appeals"]
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +156,15 @@ def ensure_indexes():
         # Report schedules: per-project status lookups for the scheduler.
         report_schedules_collection.create_index(
             [("projectId", 1), ("status", 1)],
+            background=True,
+        )
+        # Appeals: project listing and approved-flag lookups.
+        appeals_collection.create_index(
+            [("projectId", 1), ("submittedAt", -1)],
+            background=True,
+        )
+        appeals_collection.create_index(
+            [("projectId", 1), ("status", 1), ("flagId", 1)],
             background=True,
         )
         logger.info("Database indexes ensured.")
