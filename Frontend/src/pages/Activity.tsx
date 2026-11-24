@@ -128,7 +128,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
   const filteredCommits = commits.filter((c) => {
     const msg = (c.message || '').toLowerCase();
     const author = (
-      c.author?.name || c.author_name || ''
+      (typeof c.author === 'string' ? c.author : c.author?.name) || c.author_name || ''
     ).toLowerCase();
     const sha = (c.sha || '').toLowerCase();
 
@@ -362,11 +362,11 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
             <div className="divide-y divide-[#9ED4C8]">
               {filteredCommits.map((c, i) => {
                 const authorName =
-                  c.author?.name ||
+                  (typeof c.author === 'string' ? c.author : c.author?.name) ||
                   c.author_name ||
                   c.author?.login ||
                   'Developer';
-                const dateStr = c.date || c.authored_date || c.created_at;
+                const dateStr = c.timestamp || c.date || c.authored_date || c.created_at;
                 const shortSha = (c.sha || '').substring(0, 7);
 
                 return (
