@@ -61,10 +61,10 @@ except ImportError:  # .env support is optional
 
 
 PIPELINE_VERSION = "2.0.0"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "").strip()
 # Chat/generation models only. Never use an embedding-only model here.
-DEFAULT_CHAT_MODEL = "nvidia/nemotron-3.5-super-vl:free"
-DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "").strip()
+DEFAULT_GEMINI_MODEL = os.getenv("DEFAULT_GEMINI_MODEL", "").strip()
 
 # Bounded output caps keep prompts and reports small.
 MAX_RECENT_COMMITS = 10

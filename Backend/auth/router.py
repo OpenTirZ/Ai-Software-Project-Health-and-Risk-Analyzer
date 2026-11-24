@@ -22,7 +22,14 @@ from Backend.auth.schemas import (
     UserOut,
 )
 from Backend.auth.security import create_access_token, hash_password, verify_password
-from Backend.persistence import create_user, get_user, get_user_by_email, update_user, DatabaseError
+from Backend.persistence import (
+    create_user,
+    get_user,
+    get_user_by_email,
+    update_user,
+    DatabaseError,
+    DuplicateEmailError,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -83,6 +90,11 @@ def signup(payload: SignupRequest):
 
     try:
         user_id = create_user(user_doc)
+    except DuplicateEmailError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -126,7 +138,10 @@ def login(payload: LoginRequest):
     if not user:
         raise invalid_exc
 
-    if not verify_password(payload.password, user.get("password_hash", "")):
+    if (
+        not verify_password(payload.password, user.get("password_hash", ""))
+        or user.get("is_active") is False
+    ):
         raise invalid_exc
 
     access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})

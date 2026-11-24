@@ -1,4 +1,4 @@
-// Aegis AI - Backend API Server (Sprint 1)
+// कVaच (Kavach) - Backend API Server (Sprint 1)
 // Implements: Authentication API, Project API, Repository API
 // Supports both /api/* and root /* route paths for universal test runner compatibility.
 
@@ -176,6 +176,20 @@ const handleSignup = async (req, res) => {
     return res.status(400).json({
       message: 'Name, email, and password are required fields.',
       detail: 'Name, email, and password are required fields.',
+    });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({
+      message: 'Password must be at least 8 characters.',
+      detail: 'Password must be at least 8 characters.',
+    });
+  }
+
+  if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+    return res.status(400).json({
+      message: 'Password must not contain spaces or whitespace characters.',
+      detail: 'Password must not contain spaces or whitespace characters.',
     });
   }
 

@@ -40,6 +40,7 @@ with patch("pymongo.MongoClient", return_value=_mock_client):
         get_project_milestones,
         get_project_prs,
         get_pull_request_by_number,
+        bulk_upsert_pull_requests,
         upsert_issue,
         upsert_metric_snapshot,
         upsert_milestone,
@@ -155,6 +156,105 @@ class TestPullRequestPersistence:
         mock_col.update_one.side_effect = PyMongoError("Connection timeout")
         with pytest.raises(DatabaseError, match="pull request upsert"):
             upsert_pull_request(SAMPLE_PROJECT_ID, {"number": 1})
+
+
+class TestBulkUpsertPullRequests:
+    @patch("Backend.persistence_telemetry.projects_collection")
+    @patch("Backend.persistence_telemetry.pull_requests_collection")
+    @patch("Backend.persistence_telemetry._check_project_writable")
+    def test_bulk_upsert_inserts_new_prs(self, mock_check, mock_col, mock_proj_col):
+        """Bulk upsert for new PRs performs one bulk_write and returns counts."""
+        mock_check.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+        mock_col.find.return_value = []
+        mock_proj_col.find_one.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+
+        bulk_result = MagicMock()
+        bulk_result.matched_count = 0
+        bulk_result.modified_count = 0
+        bulk_result.upserted_count = 3
+        mock_col.bulk_write.return_value = bulk_result
+
+        prs = [
+            {"number": 1, "title": "PR 1", "state": "open"},
+            {"number": 2, "title": "PR 2", "state": "closed"},
+            {"number": 3, "title": "PR 3", "state": "merged"},
+        ]
+
+        res = bulk_upsert_pull_requests(SAMPLE_PROJECT_ID, prs)
+        assert res["upserted_count"] == 3
+        assert res["modified_count"] == 0
+        mock_check.assert_called_once_with(SAMPLE_PROJECT_ID)
+        mock_col.bulk_write.assert_called_once()
+        ops = mock_col.bulk_write.call_args[0][0]
+        assert len(ops) == 3
+        # Check compound key on each operation
+        assert ops[0]._filter == {"projectId": ObjectId(SAMPLE_PROJECT_ID), "number": 1}
+        assert ops[1]._filter == {"projectId": ObjectId(SAMPLE_PROJECT_ID), "number": 2}
+        assert ops[2]._filter == {"projectId": ObjectId(SAMPLE_PROJECT_ID), "number": 3}
+
+    @patch("Backend.persistence_telemetry.projects_collection")
+    @patch("Backend.persistence_telemetry.pull_requests_collection")
+    @patch("Backend.persistence_telemetry._check_project_writable")
+    def test_bulk_upsert_updates_existing_prs(self, mock_check, mock_col, mock_proj_col):
+        """Bulk upsert updates existing PRs without creating duplicates."""
+        mock_check.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+        mock_col.find.return_value = [{"number": 1, "_id": ObjectId()}]
+        mock_proj_col.find_one.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+
+        bulk_result = MagicMock()
+        bulk_result.matched_count = 1
+        bulk_result.modified_count = 1
+        bulk_result.upserted_count = 0
+        mock_col.bulk_write.return_value = bulk_result
+
+        prs = [{"number": 1, "title": "PR 1 Updated", "state": "closed"}]
+        res = bulk_upsert_pull_requests(SAMPLE_PROJECT_ID, prs)
+        assert res["upserted_count"] == 0
+        assert res["modified_count"] == 1
+        assert res["matched_count"] == 1
+
+    def test_bulk_upsert_empty_list_returns_zeros(self):
+        """Empty PR list returns zeros without hitting the database."""
+        res = bulk_upsert_pull_requests(SAMPLE_PROJECT_ID, [])
+        assert res == {"matched_count": 0, "modified_count": 0, "upserted_count": 0}
+
+    def test_bulk_upsert_missing_project_id_raises(self):
+        """Empty project_id raises ValueError."""
+        with pytest.raises(ValueError, match="project_id"):
+            bulk_upsert_pull_requests("", [{"number": 1}])
+
+    @patch("Backend.persistence_telemetry._check_project_writable")
+    def test_bulk_upsert_missing_number_raises(self, mock_check):
+        """PR item without number raises ValueError."""
+        mock_check.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+        with pytest.raises(ValueError, match="must contain a 'number'"):
+            bulk_upsert_pull_requests(SAMPLE_PROJECT_ID, [{"title": "No number"}])
+
+    @patch("Backend.persistence_telemetry.pull_requests_collection")
+    @patch("Backend.persistence_telemetry._check_project_writable")
+    def test_bulk_upsert_database_error_on_failure(self, mock_check, mock_col):
+        """Bulk write failure raises DatabaseError."""
+        mock_check.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+        mock_col.find.return_value = []
+        mock_col.bulk_write.side_effect = PyMongoError("Bulk write timeout")
+
+        with pytest.raises(DatabaseError, match="error occurred while saving pull requests"):
+            bulk_upsert_pull_requests(SAMPLE_PROJECT_ID, [{"number": 1}])
+
+    @patch("Backend.persistence_telemetry.projects_collection")
+    @patch("Backend.persistence_telemetry.pull_requests_collection")
+    @patch("Backend.persistence_telemetry._check_project_writable")
+    def test_bulk_upsert_lifecycle_reconciliation(self, mock_check, mock_col, mock_proj_col):
+        """If project is archived/deleted during write, changes are reconciled and DatabaseError raised."""
+        mock_check.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "active"}
+        mock_col.find.return_value = []
+        mock_col.bulk_write.return_value = MagicMock(matched_count=0, modified_count=0, upserted_count=1)
+        # Transitioned to archived
+        mock_proj_col.find_one.return_value = {"_id": ObjectId(SAMPLE_PROJECT_ID), "status": "archived"}
+
+        with pytest.raises(DatabaseError, match="reconciled"):
+            bulk_upsert_pull_requests(SAMPLE_PROJECT_ID, [{"number": 1, "title": "PR 1"}])
+        mock_col.delete_one.assert_called_once()
 
 
 # ===========================================================================

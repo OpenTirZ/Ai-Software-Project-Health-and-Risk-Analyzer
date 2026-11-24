@@ -10,11 +10,8 @@ import {
   AlertCircle,
   Search,
   RefreshCw,
-  Clock,
   ArrowLeft,
   ExternalLink,
-  CheckCircle2,
-  Tag,
 } from 'lucide-react';
 
 interface ActivityProps {
@@ -30,10 +27,13 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const loadTabData = async (projectId: string, tab: ActivityTab) => {
     setIsLoading(true);
+    setLoadError(null);
+
     try {
       if (tab === 'commits') {
         const data = await dataSyncApi.getCommits(projectId, 100);
@@ -47,6 +47,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
       }
     } catch (err: any) {
       console.warn(`Could not load ${tab}:`, err);
+      setLoadError(err?.message || `Failed to load ${tab.replace('-', ' ')} telemetry.`);
     } finally {
       setIsLoading(false);
     }
@@ -60,11 +61,16 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
 
   const handleSyncCurrent = async () => {
     if (!project?.id) return;
+
     setIsSyncing(true);
-    setSyncFeedback(`Syncing latest ${activeTab} from GitHub...`);
+    setSyncFeedback(`Syncing latest ${activeTab.replace('-', ' ')} from GitHub...`);
+
     try {
       if (activeTab === 'commits') {
-        await dataSyncApi.syncCommits(project.id, project.default_branch || 'main');
+        await dataSyncApi.syncCommits(
+          project.id,
+          project.default_branch || 'main',
+        );
         setSyncFeedback('Commits synchronized successfully!');
       } else if (activeTab === 'pull-requests') {
         await dataSyncApi.syncPRs(project.id);
@@ -73,11 +79,27 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
         await dataSyncApi.syncIssues(project.id);
         setSyncFeedback('Issues synchronized successfully!');
       }
+
       await loadTabData(project.id, activeTab);
       setTimeout(() => setSyncFeedback(null), 3500);
+
     } catch (err: any) {
-      setSyncFeedback(`Sync note: ${err.message || 'Synchronization failed.'}`);
-      setTimeout(() => setSyncFeedback(null), 4000);
+      const status =
+        err.status ||
+        Number(err.message?.match(/\((\d{3})\)$/)?.[1]);
+
+      let message = err.message || 'Synchronization failed.';
+
+      if (status === 403) {
+        message = 'You do not have permission to sync this data. Please check your project role and membership.';
+      } else if (status === 404) {
+        message = 'The requested project or GitHub repository could not be found.';
+      } else if (status === 429) {
+        message = 'GitHub API rate limit exceeded. Please try again later.';
+      }
+
+      setSyncFeedback(`Sync failed: ${message}`);
+      setTimeout(() => setSyncFeedback(null), 5000);
     } finally {
       setIsSyncing(false);
     }
@@ -85,304 +107,427 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
 
   if (!project) {
     return (
-      <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
-        <p className="text-slate-500">Please select an active project to view activity telemetry.</p>
-        <button
-          onClick={() => onNavigate('projects')}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
-        >
-          View Projects
-        </button>
+      <div className="mx-auto max-w-4xl p-8 text-center">
+        <div className="rounded-xl border border-[#9ED4C8] bg-white p-8">
+          <p className="text-sm text-[#3F5F5C]">
+            Please select an active project to view activity telemetry.
+          </p>
+          <button
+            onClick={() => onNavigate('projects')}
+            className="mt-4 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+          >
+            View Projects
+          </button>
+        </div>
       </div>
     );
   }
 
-  // Filter items
+  const query = searchQuery.toLowerCase();
+
   const filteredCommits = commits.filter((c) => {
-    const q = searchQuery.toLowerCase();
     const msg = (c.message || '').toLowerCase();
-    const author = (c.author?.name || c.author_name || '').toLowerCase();
+    const author = (
+      c.author?.name || c.author_name || ''
+    ).toLowerCase();
     const sha = (c.sha || '').toLowerCase();
-    return msg.includes(q) || author.includes(q) || sha.includes(q);
+
+    return msg.includes(query) || author.includes(query) || sha.includes(query);
   });
 
   const filteredPRs = prs.filter((p) => {
-    const q = searchQuery.toLowerCase();
     const title = (p.title || '').toLowerCase();
     const author = (p.author?.login || p.author || '').toLowerCase();
     const num = String(p.number || p.pr_number || '');
-    return title.includes(q) || author.includes(q) || num.includes(q);
+
+    return title.includes(query) || author.includes(query) || num.includes(query);
   });
 
   const filteredIssues = issues.filter((i) => {
-    const q = searchQuery.toLowerCase();
     const title = (i.title || '').toLowerCase();
     const author = (i.author?.login || i.author || '').toLowerCase();
     const num = String(i.number || i.issue_number || '');
-    return title.includes(q) || author.includes(q) || num.includes(q);
+
+    return title.includes(query) || author.includes(query) || num.includes(query);
   });
 
+  const tabs = [
+    {
+      id: 'commits' as const,
+      label: 'Commits',
+      count: commits.length,
+      icon: GitCommit,
+    },
+    {
+      id: 'pull-requests' as const,
+      label: 'Pull Requests',
+      count: prs.length,
+      icon: GitPullRequest,
+    },
+    {
+      id: 'issues' as const,
+      label: 'Issues',
+      count: issues.length,
+      icon: AlertCircle,
+    },
+  ];
+
+  const emptyState = (
+    icon: React.ElementType,
+    message: string,
+  ) => {
+    const Icon = icon;
+
+    return (
+      <div className="px-6 py-14 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#CDEFE6] text-[#0B6B63]">
+          <Icon className="h-6 w-6" />
+        </div>
+        <p className="mt-4 text-sm font-medium text-[#3F5F5C]">
+          {message}
+        </p>
+      </div>
+    );
+  };
+
+  const stateBadge = (state: string, kind: 'pr' | 'issue') => {
+    const normalized = state.toLowerCase();
+
+    let styles = 'border-[#9ED4C8] bg-[#EAF8F3] text-[#3F5F5C]';
+
+    if (normalized === 'open') {
+      styles = 'border-[#0B6B63]/20 bg-[#0B6B63]/5 text-[#0B6B63]';
+    } else if (normalized === 'merged') {
+      styles = 'border-[#9ED4C8] bg-[#CDEFE6] text-[#0B6B63]';
+    } else if (normalized === 'closed') {
+      styles =
+        kind === 'pr'
+          ? 'border-[#CC1F2E]/20 bg-[#CC1F2E]/5 text-[#CC1F2E]'
+          : 'border-[#9ED4C8] bg-[#EAF8F3] text-[#3F5F5C]';
+    }
+
+    return (
+      <span
+        className={`inline-flex shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${styles}`}
+      >
+        {normalized}
+      </span>
+    );
+  };
+
+  const githubLink = (url?: string) => {
+    if (!url) return null;
+
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold text-[#0B6B63] hover:bg-[#CDEFE6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+      >
+        GitHub
+        <ExternalLink className="h-3.5 w-3.5" />
+      </a>
+    );
+  };
+
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto max-w-7xl space-y-6 p-5 md:p-8">
+
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <button
             onClick={() => onNavigate('overview')}
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-medium mb-1 cursor-pointer"
+            className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#5F7C79] hover:text-[#0B6B63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Project Overview</span>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Project Overview
           </button>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+
+          <h1 className="text-2xl font-bold tracking-tight text-[#0E2A2A] md:text-3xl">
             Activity Telemetry
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Raw ingested GitHub telemetry for <span className="font-semibold text-slate-700">{project.name}</span>.
+
+          <p className="mt-1 text-sm text-[#3F5F5C]">
+            Raw ingested GitHub telemetry for{' '}
+            <span className="font-semibold text-[#0E2A2A]">
+              {project.name}
+            </span>
+            .
           </p>
         </div>
 
-        {/* Sync Current Tab Button */}
         <button
           onClick={handleSyncCurrent}
           disabled={isSyncing}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{isSyncing ? 'Synchronizing...' : `Sync ${activeTab.replace('-', ' ').toUpperCase()}`}</span>
+          <RefreshCw className="h-4 w-4" />
+          {isSyncing
+            ? 'Synchronizing...'
+            : `Sync ${activeTab.replace('-', ' ')}`}
         </button>
       </div>
 
       {syncFeedback && (
-        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 animate-fadeIn">
+        <div
+          role="status"
+          className="rounded-lg border border-[#9ED4C8] bg-white px-4 py-3 text-sm text-[#3F5F5C]"
+        >
           {syncFeedback}
         </div>
       )}
 
-      {/* Tabs & Search Filter */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Tabs Control */}
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl max-w-md">
-          <button
-            onClick={() => {
-              setActiveTab('commits');
-              setSearchQuery('');
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'commits'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <GitCommit className="w-3.5 h-3.5" />
-            <span>Commits ({commits.length})</span>
-          </button>
+      {loadError && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-[#CC1F2E]/30 bg-[#CC1F2E]/5 px-4 py-3 text-sm text-[#CC1F2E]"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{loadError}</span>
+        </div>
+      )}
 
-          <button
-            onClick={() => {
-              setActiveTab('pull-requests');
-              setSearchQuery('');
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'pull-requests'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <GitPullRequest className="w-3.5 h-3.5" />
-            <span>Pull Requests ({prs.length})</span>
-          </button>
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div
+          className="grid grid-cols-3 gap-1 rounded-lg border border-[#9ED4C8] bg-white p-1"
+          aria-label="Activity type"
+        >
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
 
-          <button
-            onClick={() => {
-              setActiveTab('issues');
-              setSearchQuery('');
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'issues'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <AlertCircle className="w-3.5 h-3.5" />
-            <span>Issues ({issues.length})</span>
-          </button>
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSearchQuery('');
+                }}
+                aria-pressed={isActive}
+                className={`flex min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-xs font-semibold sm:text-sm ${
+                  isActive
+                    ? 'bg-[#0B6B63] text-white'
+                    : 'text-[#3F5F5C] hover:bg-[#CDEFE6] hover:text-[#0B6B63]'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{tab.label}</span>
+                <span className="tabular-nums opacity-80">
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Search Bar */}
-        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400" />
+        <div className="flex w-full items-center gap-2 rounded-lg border border-[#9ED4C8] bg-white px-3 py-2.5 lg:max-w-sm">
+          <Search className="h-4 w-4 shrink-0 text-[#5F7C79]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={`Search ${activeTab.replace('-', ' ')}...`}
-            className="w-full text-xs text-slate-800 focus:outline-none bg-transparent placeholder:text-slate-400"
+            aria-label={`Search ${activeTab.replace('-', ' ')}`}
+            className="w-full bg-transparent text-sm text-[#0E2A2A] outline-none placeholder:text-[#5F7C79]"
           />
         </div>
       </div>
 
-      {/* COMMITS VIEW */}
+      {isLoading && (
+        <div className="rounded-lg border border-[#9ED4C8] bg-white px-4 py-3 text-sm text-[#5F7C79]">
+          Loading {activeTab.replace('-', ' ')}...
+        </div>
+      )}
+
       {activeTab === 'commits' && (
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+        <section className="overflow-hidden rounded-xl border border-[#9ED4C8] bg-white">
+          <div className="border-b border-[#9ED4C8] px-5 py-4">
+            <h2 className="text-sm font-semibold text-[#0E2A2A]">
+              Commit History
+            </h2>
+            <p className="mt-1 text-xs text-[#5F7C79]">
+              Repository commits and their authors.
+            </p>
+          </div>
+
           {filteredCommits.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs space-y-2">
-              <GitCommit className="w-8 h-8 text-slate-300 mx-auto" />
-              <p>No commits found. Click "Sync Commits" above to pull commit history from GitHub.</p>
-            </div>
+            emptyState(
+              GitCommit,
+              searchQuery
+                ? 'No commits match your search.'
+                : 'No commits found. Use Sync Commits to retrieve commit history from GitHub.',
+            )
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-[#9ED4C8]">
               {filteredCommits.map((c, i) => {
-                const authorName = c.author?.name || c.author_name || c.author?.login || 'Developer';
+                const authorName =
+                  c.author?.name ||
+                  c.author_name ||
+                  c.author?.login ||
+                  'Developer';
                 const dateStr = c.date || c.authored_date || c.created_at;
                 const shortSha = (c.sha || '').substring(0, 7);
 
                 return (
-                  <div key={c._id || c.sha || i} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-slate-900">
+                  <div
+                    key={c._id || c.sha || i}
+                    className="flex flex-col justify-between gap-3 px-5 py-4 hover:bg-[#EAF8F3] sm:flex-row sm:items-start"
+                  >
+                    <div className="min-w-0 space-y-2">
+                      <p className="break-words text-sm font-semibold leading-5 text-[#0E2A2A]">
                         {c.message || 'Commit with no message'}
                       </p>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
-                        <span className="font-sans font-medium text-slate-700">{authorName}</span>
-                        <span>•</span>
-                        <span>{dateStr ? new Date(dateStr).toLocaleString() : 'N/A'}</span>
+
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#5F7C79]">
+                        <span className="font-medium text-[#3F5F5C]">
+                          {authorName}
+                        </span>
+                        <span className="hidden sm:inline">•</span>
+                        <span>
+                          {dateStr
+                            ? new Date(dateStr).toLocaleString()
+                            : 'N/A'}
+                        </span>
                         {c.branch && (
-                          <>
-                            <span>•</span>
-                            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">
-                              {c.branch}
-                            </span>
-                          </>
+                          <span className="rounded-md border border-[#9ED4C8] bg-[#EAF8F3] px-2 py-1 font-mono text-[11px] text-[#3F5F5C]">
+                            {c.branch}
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="shrink-0 flex items-center gap-2">
-                      <span className="px-2 py-1 rounded bg-slate-100 border border-slate-200 text-xs font-mono text-slate-700">
+                    {shortSha && (
+                      <span className="w-fit shrink-0 rounded-md border border-[#9ED4C8] bg-[#EAF8F3] px-2.5 py-1.5 font-mono text-xs text-[#3F5F5C]">
                         {shortSha}
                       </span>
-                    </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
 
-      {/* PULL REQUESTS VIEW */}
       {activeTab === 'pull-requests' && (
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+        <section className="overflow-hidden rounded-xl border border-[#9ED4C8] bg-white">
+          <div className="border-b border-[#9ED4C8] px-5 py-4">
+            <h2 className="text-sm font-semibold text-[#0E2A2A]">
+              Pull Requests
+            </h2>
+            <p className="mt-1 text-xs text-[#5F7C79]">
+              Review requests and merge status from GitHub.
+            </p>
+          </div>
+
           {filteredPRs.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs space-y-2">
-              <GitPullRequest className="w-8 h-8 text-slate-300 mx-auto" />
-              <p>No pull requests found. Click "Sync Pull Requests" to ingest PR telemetry.</p>
-            </div>
+            emptyState(
+              GitPullRequest,
+              searchQuery
+                ? 'No pull requests match your search.'
+                : 'No pull requests found. Use Sync Pull Requests to retrieve them from GitHub.',
+            )
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-[#9ED4C8]">
               {filteredPRs.map((p, i) => {
                 const state = String(p.state || 'open').toLowerCase();
-                const badgeColor =
-                  state === 'merged'
-                    ? 'text-purple-700 bg-purple-50 border-purple-200'
-                    : state === 'closed'
-                    ? 'text-rose-700 bg-rose-50 border-rose-200'
-                    : 'text-emerald-700 bg-emerald-50 border-emerald-200';
 
                 return (
-                  <div key={p._id || p.number || i} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-slate-500">
+                  <div
+                    key={p._id || p.number || i}
+                    className="flex flex-col justify-between gap-3 px-5 py-4 hover:bg-[#EAF8F3] sm:flex-row sm:items-start"
+                  >
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-[#5F7C79]">
                           #{p.number || p.pr_number}
                         </span>
-                        <h4 className="text-sm font-semibold text-slate-900">
-                          {p.title}
-                        </h4>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${badgeColor}`}>
-                          {state}
-                        </span>
+                        <h3 className="break-words text-sm font-semibold text-[#0E2A2A]">
+                          {p.title || 'Untitled pull request'}
+                        </h3>
+                        {stateBadge(state, 'pr')}
                       </div>
-                      <p className="text-xs text-slate-500">
-                        Author: <span className="font-medium text-slate-700">{p.author?.login || p.author || 'contributor'}</span>
-                        {' '}&bull; Created: {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'}
+
+                      <p className="text-xs text-[#5F7C79]">
+                        Author:{' '}
+                        <span className="font-medium text-[#3F5F5C]">
+                          {p.author?.login || p.author || 'contributor'}
+                        </span>
+                        {' • '}Created:{' '}
+                        {p.created_at
+                          ? new Date(p.created_at).toLocaleDateString()
+                          : 'N/A'}
                       </p>
                     </div>
 
-                    {p.html_url && (
-                      <a
-                        href={p.html_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
-                      >
-                        <span>GitHub</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
+                    {githubLink(p.html_url)}
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
 
-      {/* ISSUES VIEW */}
       {activeTab === 'issues' && (
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+        <section className="overflow-hidden rounded-xl border border-[#9ED4C8] bg-white">
+          <div className="border-b border-[#9ED4C8] px-5 py-4">
+            <h2 className="text-sm font-semibold text-[#0E2A2A]">
+              Project Issues
+            </h2>
+            <p className="mt-1 text-xs text-[#5F7C79]">
+              Tracked repository issues and their current status.
+            </p>
+          </div>
+
           {filteredIssues.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs space-y-2">
-              <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
-              <p>No issues found. Click "Sync Issues" to pull issue records from GitHub.</p>
-            </div>
+            emptyState(
+              AlertCircle,
+              searchQuery
+                ? 'No issues match your search.'
+                : 'No issues found. Use Sync Issues to retrieve issue records from GitHub.',
+            )
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-[#9ED4C8]">
               {filteredIssues.map((issue, i) => {
                 const state = String(issue.state || 'open').toLowerCase();
-                const badgeColor =
-                  state === 'closed'
-                    ? 'text-slate-600 bg-slate-100 border-slate-200'
-                    : 'text-emerald-700 bg-emerald-50 border-emerald-200';
 
                 return (
-                  <div key={issue._id || issue.number || i} className="p-4 hover:bg-slate-50/80 transition-colors flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-slate-500">
+                  <div
+                    key={issue._id || issue.number || i}
+                    className="flex flex-col justify-between gap-3 px-5 py-4 hover:bg-[#EAF8F3] sm:flex-row sm:items-start"
+                  >
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-[#5F7C79]">
                           #{issue.number || issue.issue_number}
                         </span>
-                        <h4 className="text-sm font-semibold text-slate-900">
-                          {issue.title}
-                        </h4>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${badgeColor}`}>
-                          {state}
-                        </span>
+                        <h3 className="break-words text-sm font-semibold text-[#0E2A2A]">
+                          {issue.title || 'Untitled issue'}
+                        </h3>
+                        {stateBadge(state, 'issue')}
                       </div>
-                      <p className="text-xs text-slate-500">
-                        Author: <span className="font-medium text-slate-700">{issue.author?.login || issue.author || 'user'}</span>
-                        {' '}&bull; Last updated: {issue.updated_at ? new Date(issue.updated_at).toLocaleDateString() : 'N/A'}
+
+                      <p className="text-xs text-[#5F7C79]">
+                        Author:{' '}
+                        <span className="font-medium text-[#3F5F5C]">
+                          {issue.author?.login || issue.author || 'user'}
+                        </span>
+                        {' • '}Last updated:{' '}
+                        {issue.updated_at
+                          ? new Date(issue.updated_at).toLocaleDateString()
+                          : 'N/A'}
                       </p>
                     </div>
 
-                    {issue.html_url && (
-                      <a
-                        href={issue.html_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
-                      >
-                        <span>GitHub</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
+                    {githubLink(issue.html_url)}
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
     </div>
   );

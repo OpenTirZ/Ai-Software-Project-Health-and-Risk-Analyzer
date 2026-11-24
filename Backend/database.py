@@ -69,36 +69,76 @@ contributors_collection = db["contributors"]
 milestones_collection = db["milestones"]
 metric_snapshots_collection = db["metric_snapshots"]
 report_schedules_collection = db["report_schedules"]
+appeals_collection = db["appeals"]
 
 
 # ---------------------------------------------------------------------------
 # Index management
 # ---------------------------------------------------------------------------
 
+def verify_user_unique_index():
+    """
+    Verify that the required unique index on users.email_normalized is active.
+    This check runs outside the broad exception handler of ensure_indexes().
+    Application startup is aborted if the index is missing or misconfigured.
+    """
+    try:
+        indexes = list(users_collection.list_indexes())
+    except Exception as exc:
+        raise RuntimeError(f"Failed to inspect indexes on users collection: {exc}") from exc
+
+    for idx in indexes:
+        idx_name = idx.get("name")
+        key_dict = dict(idx.get("key", {}))
+
+        # Check for our exact expected index
+        if idx_name == "uniq_users_email_normalized":
+            if key_dict != {"email_normalized": 1}:
+                raise RuntimeError(
+                    f"Index 'uniq_users_email_normalized' has invalid key pattern: {key_dict}. "
+                    "Expected {'email_normalized': 1}. Refusing application startup."
+                )
+            if not idx.get("unique", False):
+                raise RuntimeError(
+                    "Index 'uniq_users_email_normalized' exists but is NOT unique! "
+                    "Data uniqueness cannot be guaranteed. Refusing application startup."
+                )
+            if idx.get("sparse", False):
+                raise RuntimeError(
+                    "Index 'uniq_users_email_normalized' has sparse=True. "
+                    "A sparse unique index does not enforce uniqueness on documents where the "
+                    "field is absent, which violates the B2 uniqueness guarantee. "
+                    "Manual operator intervention required. Refusing application startup."
+                )
+            if "partialFilterExpression" in idx:
+                raise RuntimeError(
+                    "Index 'uniq_users_email_normalized' has a partialFilterExpression. "
+                    "A partial unique index does not enforce uniqueness across all documents, "
+                    "which violates the B2 uniqueness guarantee. "
+                    "Manual operator intervention required. Refusing application startup."
+                )
+            logger.info("Verified active unique index 'uniq_users_email_normalized' on users collection.")
+            return
+
+        # Check if an index exists with the same key but different name
+        if key_dict == {"email_normalized": 1}:
+            raise RuntimeError(
+                f"Conflicting index '{idx_name}' found on users.email_normalized. "
+                "Expected exact index name 'uniq_users_email_normalized'. "
+                "Manual operator intervention required. Refusing application startup."
+            )
+
+    raise RuntimeError(
+        "FATAL: Required unique index 'uniq_users_email_normalized' on users.email_normalized is missing! "
+        "Application cannot start without database uniqueness enforcement. "
+        "Run 'python -m Backend.scripts.migrate_b2_email_uniqueness --apply' to create and backfill."
+    )
+
+
 def ensure_indexes():
     """
-    Create required database indexes.
+    Create required database indexes and verify user unique constraint.
     Call once at application startup (e.g. in FastAPI lifespan).
-
-    Contributors: unique compound index on (projectId, github_username)
-    to prevent duplicate contributors within the same project while
-    allowing the same GitHub user across different projects.
-
-    Commits: unique compound index on (projectId, sha)
-    Pull Requests: unique compound index on (projectId, number) [UNIQUE]
-    Issues: unique compound index on (projectId, number) [UNIQUE]
-    Milestones: unique compound index on (projectId, milestone_id) [UNIQUE]
-    Metric Snapshots: compound index on (projectId, calculatedAt)
-    to prevent duplicate commits within the same project.
-
-    Issues: unique compound index on (projectId, github_id) so repeated
-    GitHub issue synchronization cannot create duplicate issues.
-
-    Reports: compound index on (projectId, generatedAt: -1) so per-project
-    report history listings read newest-first directly from the index.
-
-    Report Schedules: compound index on (projectId, status) for schedule
-    lookups per project filtered by active/paused status.
     """
     try:
         contributors_collection.create_index(
@@ -157,7 +197,30 @@ def ensure_indexes():
             [("projectId", 1), ("status", 1)],
             background=True,
         )
-        logger.info("Database indexes ensured.")
+        logger.info("General database indexes ensured.")
+        # Appeals: project listing and approved-flag lookups.
+        appeals_collection.create_index(
+            [("projectId", 1), ("submittedAt", -1)],
+            background=True,
+        )
+        appeals_collection.create_index(
+            [("projectId", 1), ("status", 1), ("flagId", 1)],
+            background=True,
+        )
+        # Audit logs: compound index (timestamp: -1, resourceType: 1) for fast chronological/resource filtering.
+        audit_logs_collection.create_index(
+            [("timestamp", -1), ("resourceType", 1)],
+            background=True,
+        )
+        # Audit logs: TTL index for 90-day retention policy compliance (90 days = 7,776,000 seconds).
+        audit_logs_collection.create_index(
+            [("timestamp", 1)],
+            expireAfterSeconds=90 * 24 * 60 * 60,
+            background=True,
+        )
     except Exception as exc:  # pragma: no cover
-        # Non-fatal: indexes may already exist or be created on the next startup.
-        logger.warning("Could not ensure database indexes: %s", exc)
+        # Non-fatal: general indexes may already exist or be created on the next startup.
+        logger.warning("Could not ensure general database indexes: %s", exc)
+
+    # Critical uniqueness verification: strictly outside the non-fatal handler
+    verify_user_unique_index()

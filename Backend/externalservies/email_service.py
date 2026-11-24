@@ -750,7 +750,7 @@ def build_plain_text_body(
 
     lines: List[str] = [
         "================================================================================",
-        "AEGIS AI - SOFTWARE PROJECT HEALTH & RISK INTELLIGENCE REPORT",
+        "कVaच (KAVACH) - SOFTWARE PROJECT HEALTH & RISK INTELLIGENCE REPORT",
         "================================================================================",
         f"Project:      {project_name}",
         f"Status:       {status_str}",
@@ -820,7 +820,7 @@ def build_plain_text_body(
         "ATTACHMENT NOTICE:",
         f"A comprehensive PDF report ({pdf_filename}) is attached to this email.",
         "--------------------------------------------------------------------------------",
-        "Automated notification sent by Aegis AI Subsystem. Confidential.",
+        "Automated notification sent by कVaच (Kavach) Subsystem. Confidential.",
         "================================================================================",
     ])
 

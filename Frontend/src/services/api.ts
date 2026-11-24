@@ -369,7 +369,13 @@ export const authApi = {
     };
   },
 
-  async _mockSignup(name: string, username: string, email: string, _password: string): Promise<AuthResponse> {
+  async _mockSignup(name: string, username: string, email: string, password: string): Promise<AuthResponse> {
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
+    }
+    if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+      throw new Error('Password must not contain spaces or whitespace characters.');
+    }
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
     let registeredUsers: Array<{ email: string; name: string; username: string }> = [];
@@ -867,50 +873,78 @@ export const dataSyncApi = {
     return res.json();
   },
 
-  async getPRs(projectId: string, state = 'all'): Promise<any[]> {
+  async getPRs(projectId: string, state?: string): Promise<any[]> {
     const token = localStorage.getItem('aegis_token');
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/prs?state=${state}`, {
+    const query = state && state.toLowerCase() !== 'all' ? `?state=${encodeURIComponent(state)}` : '';
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/prs${query}`, {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });
     if (!res.ok) throw new Error(`Failed to fetch pull requests (${res.status})`);
     return res.json();
   },
 
-  async syncPRs(projectId: string): Promise<any> {
+  async syncPRs(projectId: string, timeoutMs = 60000): Promise<any> {
     const token = localStorage.getItem('aegis_token');
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-prs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error(`Failed to sync pull requests (${res.status})`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-prs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`Failed to sync pull requests (${res.status})`);
+      return await res.json();
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Synchronization timed out. Please try again.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
-  async getIssues(projectId: string, state = 'all'): Promise<any[]> {
+  async getIssues(projectId: string, state?: string): Promise<any[]> {
     const token = localStorage.getItem('aegis_token');
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/issues?state=${state}`, {
+    const query = state && state.toLowerCase() !== 'all' ? `?state=${encodeURIComponent(state)}` : '';
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/issues${query}`, {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });
     if (!res.ok) throw new Error(`Failed to fetch issues (${res.status})`);
     return res.json();
   },
 
-  async syncIssues(projectId: string): Promise<any> {
+  async syncIssues(projectId: string, timeoutMs = 60000): Promise<any> {
     const token = localStorage.getItem('aegis_token');
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-issues`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error(`Failed to sync issues (${res.status})`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/sync-issues`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`Failed to sync issues (${res.status})`);
+      return await res.json();
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Synchronization timed out. Please try again.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   async getMilestones(projectId: string): Promise<any[]> {

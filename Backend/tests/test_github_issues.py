@@ -1237,18 +1237,26 @@ class TestSyncEndpoint:
         assert session.calls == []
         # Explanation: a manager who is not in the project cannot sync it.
 
-    def test_developer_role_cannot_sync(self, session):
+    def test_developer_role_can_sync(self, session, collection):
         doc = project_document()
         doc["members"] = [{"userId": DEVELOPER_ID}]
+        session.outcomes = [
+            make_response(body=[make_issue(1)])
+        ]
+
         app.dependency_overrides[get_current_user] = lambda: DEVELOPER
         try:
-            with patch(f"{ROUTER}.get_project", return_value=doc):
+            with patch(f"{ROUTER}.get_project", return_value=doc), \
+                    patch(f"{SERVICE}.get_project", return_value=doc):
                 response = client.post(self.URL)
         finally:
             app.dependency_overrides.clear()
-        assert response.status_code == 403
-        assert session.calls == []
-        # Explanation: syncing needs admin/project-manager role.
+
+        assert response.status_code == 200, response.text
+        assert response.json()["success"] is True
+        assert response.json()["fetched_count"] == 1
+        assert collection.bulk_calls == 1
+        assert len(session.calls) == 1
 
     def test_unauthenticated_request_is_rejected(self):
         app.dependency_overrides.clear()
@@ -1363,7 +1371,8 @@ class TestListEndpoint:
 
     def test_invalid_state_query_is_a_validation_error(self, as_manager, project):
         assert client.get(self.URL, params={"state": "weird"}).status_code == 422
-        # Explanation: FastAPI validates the query parameter.
+        assert client.get(self.URL, params={"state": "all"}).status_code == 422
+        # Explanation: FastAPI validates the query parameter; 'all' is invalid on the strict backend.
 
     def test_developer_member_can_read(self, collection):
         doc = project_document()

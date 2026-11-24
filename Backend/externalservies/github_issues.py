@@ -556,9 +556,19 @@ def sync_project_issues(project_id: str, repo_url: Optional[str] = None) -> dict
         raise ProjectNotFoundError(f"Project '{project_id}' not found.")
 
     resolved_url = _resolve_repo_url(project, repo_url)
-    result = get_github_issues(resolved_url)
-    issues = result["issues"]
 
+    try:
+        result = get_github_issues(resolved_url)
+    except GitHubRateLimitError as exc:
+        logger.warning(
+            "GitHub issue sync rate limited for project %s (repository %s): %s",
+            project_id,
+            resolved_url,
+            exc,
+        )
+        raise
+
+    issues = result["issues"]
     if issues:
         counts = bulk_upsert_issues(project_id, issues)
     else:
