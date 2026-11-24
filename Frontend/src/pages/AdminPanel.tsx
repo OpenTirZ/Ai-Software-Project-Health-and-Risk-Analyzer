@@ -256,8 +256,8 @@ export const AdminPanel: React.FC = () => {
             {loadingUsers ? 'Loading…' : `${total} user${total !== 1 ? 's' : ''} found`}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="w-full overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-[#CDEFE6]">
                   <th className="px-4 py-3">User</th>

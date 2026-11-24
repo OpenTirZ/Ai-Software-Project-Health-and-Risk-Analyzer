@@ -150,8 +150,8 @@ export const StaleIssuesTable: React.FC<Props> = ({ data, isLoading, error }) =>
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto -mx-6 px-6">
-            <table className="w-full text-left text-xs">
+          <div className="w-full overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
+            <table className="w-full min-w-[500px] text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th

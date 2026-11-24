@@ -260,7 +260,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
         <button
           onClick={handleSyncCurrent}
           disabled={isSyncing}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+          className="w-full sm:w-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
         >
           <RefreshCw className="h-4 w-4" />
           {isSyncing

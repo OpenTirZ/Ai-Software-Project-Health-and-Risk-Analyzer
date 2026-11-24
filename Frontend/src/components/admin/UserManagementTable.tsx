@@ -105,8 +105,8 @@ export const UserManagementTable: React.FC<UserManagementTableProps> = ({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
+          <div className="w-full overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
+            <table className="w-full min-w-[560px] text-left">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">

@@ -202,7 +202,7 @@ export const HealthAnalysis: React.FC<HealthAnalysisProps> = ({
           type="button"
           onClick={() => fetchBreakdown(project.id)}
           disabled={isLoading}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-md border border-[#9ED4C8] bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:border-[#0B6B63] hover:text-[#0B6B63] disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-[#9ED4C8] bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:border-[#0B6B63] hover:text-[#0B6B63] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           {isLoading ? 'Refreshing...' : 'Refresh'}
@@ -254,7 +254,7 @@ export const HealthAnalysis: React.FC<HealthAnalysisProps> = ({
           </div>
 
           <div className="flex flex-col items-center justify-center py-4">
-            <div className="relative h-52 w-52 max-w-full sm:h-56 sm:w-56">
+            <div className="relative h-36 w-36 max-w-full sm:h-48 sm:w-48">
               <svg
                 className="h-full w-full -rotate-90"
                 viewBox="0 0 160 160"
@@ -286,7 +286,7 @@ export const HealthAnalysis: React.FC<HealthAnalysisProps> = ({
               </svg>
 
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-5xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-6xl">
+                <span className="text-4xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-5xl">
                   {score !== null ? score : '--'}
                 </span>
 

@@ -187,7 +187,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, onNavigate }) => 
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Last synced */}
           {lastSyncedAt && (
             <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
@@ -207,7 +207,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, onNavigate }) => 
             type="button"
             onClick={handleRefresh}
             disabled={isSyncing}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+            className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
               isSyncing
                 ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
                 : 'border-[#9ED4C8] bg-white text-[#0B6B63] hover:bg-[#EAF8F3]'

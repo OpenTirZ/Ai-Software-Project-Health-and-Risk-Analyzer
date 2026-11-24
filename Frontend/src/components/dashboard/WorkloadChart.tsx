@@ -94,12 +94,13 @@ export const WorkloadChart: React.FC<Props> = ({ data, isLoading, error }) => {
           <p className="text-xs">Sync commits and PRs to populate this chart</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={Math.max(240, data.length * 36)}>
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 8, right: 20, left: 10, bottom: 8 }}
-          >
+        <div className="w-full min-w-0" style={{ height: Math.max(240, data.length * 36) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              layout="vertical"
+              margin={{ top: 8, right: 20, left: 10, bottom: 8 }}
+            >
             <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11 }} />
             <YAxis
@@ -122,6 +123,7 @@ export const WorkloadChart: React.FC<Props> = ({ data, isLoading, error }) => {
             <Bar dataKey="pullRequests" name="Pull Requests" fill={PR_COLOR} radius={[0, 4, 4, 0]} barSize={14} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
