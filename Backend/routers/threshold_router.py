@@ -102,7 +102,12 @@ def get_project_thresholds_endpoint(
             detail=str(exc),
         )
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
@@ -163,7 +168,12 @@ def update_project_thresholds_endpoint(
             detail=str(exc),
         )
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
@@ -173,6 +183,12 @@ def update_project_thresholds_endpoint(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Only project owners, admins, or leads can update thresholds.",
+        )
+
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is archived and read-only. Threshold updates are disabled.",
         )
 
     # Fetch existing thresholds or defaults to support partial updates

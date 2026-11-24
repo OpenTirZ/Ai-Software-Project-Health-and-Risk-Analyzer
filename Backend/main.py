@@ -26,15 +26,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from Backend.auth.lifecycle import router as lifecycle_router
 from Backend.auth.router import router as auth_router
 from Backend.database import ensure_indexes
 from Backend.persistence import DatabaseError
+from Backend.routers.admin_router import router as admin_router
+from Backend.routers.appeal_router import router as appeal_router
 from Backend.routers.data_sync_router import router as data_sync_router
 from Backend.routers.metric_router import router as metric_router
+from Backend.routers.project_lifecycle_router import router as project_lifecycle_router
 from Backend.routers.project_router import router as project_router
 from Backend.routers.report_router import router as report_router
 from Backend.routers.repository_router import router as repository_router
 from Backend.routers.threshold_router import router as threshold_router
+from Backend.routers.webhook_router import router as webhook_router
+from Backend.audit.audit_middleware import AuditMiddleware
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +162,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuditMiddleware)
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -166,11 +173,16 @@ app.include_router(auth_router)
 app.include_router(auth_router, prefix="/api")
 
 app.include_router(project_router)
+app.include_router(project_lifecycle_router)
 app.include_router(repository_router)
 app.include_router(data_sync_router)
 app.include_router(threshold_router)
 app.include_router(metric_router)
 app.include_router(report_router)
+app.include_router(lifecycle_router)
+app.include_router(admin_router)
+app.include_router(appeal_router)
+app.include_router(webhook_router)
 
 
 # ---------------------------------------------------------------------------

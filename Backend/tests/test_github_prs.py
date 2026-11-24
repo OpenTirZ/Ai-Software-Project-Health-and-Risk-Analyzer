@@ -26,6 +26,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
+import requests
 
 # ---------------------------------------------------------------------------
 # Environment setup — must happen BEFORE importing Backend modules
@@ -978,3 +979,244 @@ class TestIntegrationFlow:
         assert first_call_pr["state"] == "merged"
         assert first_call_pr["author"] == "alice"
         assert first_call_pr["requested_reviewers"] == ["bob"]
+
+
+# ===========================================================================
+# 16. Issue #174: PR Sync Optimization & N+1 Request Elimination Tests
+# ===========================================================================
+
+class TestIssue174PRSyncOptimization:
+    """Verifies that PR synchronization eliminates the N+1 detail request pattern."""
+
+    @patch("Backend.externalservies.github_prs._fetch_pr_details")
+    @patch("Backend.externalservies.github_prs._fetch_all_pr_items")
+    @patch("Backend.externalservies.github_prs._get_authenticated_session")
+    @patch("Backend.externalservies.github_prs._parse_github_url")
+    def test_no_n_plus_one_detail_calls_for_closed_prs(
+        self,
+        mock_parse_url,
+        mock_session,
+        mock_fetch_all,
+        mock_fetch_details,
+    ):
+        """Historical closed/merged PRs must not trigger secondary /pulls/{number} requests."""
+        mock_parse_url.return_value = ("OpenTirZ", "test-repo")
+        mock_session.return_value = MagicMock()
+
+        # 5 closed PRs, 5 merged PRs, 2 open PRs
+        raw_prs = []
+        for i in range(1, 6):
+            raw_prs.append({
+                "number": i,
+                "title": f"Closed PR #{i}",
+                "state": "closed",
+                "user": {"login": f"user{i}"},
+                "created_at": "2026-01-01T00:00:00Z",
+                "closed_at": "2026-01-02T00:00:00Z",
+                "merged_at": None,
+                "html_url": f"https://github.com/OpenTirZ/test-repo/pull/{i}",
+            })
+        for i in range(6, 11):
+            raw_prs.append({
+                "number": i,
+                "title": f"Merged PR #{i}",
+                "state": "closed",
+                "user": {"login": f"user{i}"},
+                "created_at": "2026-01-01T00:00:00Z",
+                "closed_at": "2026-01-02T00:00:00Z",
+                "merged_at": "2026-01-02T00:00:00Z",
+                "html_url": f"https://github.com/OpenTirZ/test-repo/pull/{i}",
+            })
+        for i in range(11, 13):
+            raw_prs.append({
+                "number": i,
+                "title": f"Open PR #{i}",
+                "state": "open",
+                "user": {"login": f"user{i}"},
+                "created_at": "2026-01-01T00:00:00Z",
+                "closed_at": None,
+                "merged_at": None,
+                "html_url": f"https://github.com/OpenTirZ/test-repo/pull/{i}",
+            })
+
+        mock_fetch_all.return_value = raw_prs
+        mock_fetch_details.return_value = {
+            "additions": 10,
+            "deletions": 5,
+            "reviews_count": 2,
+            "reviews": [{"id": 1, "state": "APPROVED"}],
+        }
+
+        result = get_github_prs("https://github.com/OpenTirZ/test-repo")
+        prs = result["pull_requests"]
+
+        # All 12 PRs must be processed and returned
+        assert len(prs) == 12
+
+        # Secondary calls must ONLY be made for the 2 open PRs, NOT the 10 closed/merged PRs
+        assert mock_fetch_details.call_count == 2
+        called_numbers = [call.args[3] for call in mock_fetch_details.call_args_list]
+        assert called_numbers == [11, 12]
+
+        # Verify closed PRs preserved basic data without secondary calls
+        closed_pr = next(p for p in prs if p["number"] == 1)
+        assert closed_pr["state"] == "closed"
+        assert closed_pr["author"] == "user1"
+        assert closed_pr["open_duration_hours"] == 24.0
+
+        merged_pr = next(p for p in prs if p["number"] == 6)
+        assert merged_pr["state"] == "merged"
+        assert merged_pr["author"] == "user6"
+        assert merged_pr["open_duration_hours"] == 24.0
+
+        open_pr = next(p for p in prs if p["number"] == 11)
+        assert open_pr["state"] == "open"
+        assert open_pr["additions"] == 10
+        assert open_pr["reviews_count"] == 2
+
+    @patch("Backend.externalservies.github_prs._fetch_all_pr_items")
+    @patch("Backend.externalservies.github_prs._get_authenticated_session")
+    @patch("Backend.externalservies.github_prs._parse_github_url")
+    def test_secondary_request_failure_does_not_abort_sync(
+        self,
+        mock_parse_url,
+        mock_session,
+        mock_fetch_all,
+    ):
+        """If secondary requests fail or hit 429/timeout, sync must not collapse and basic PR data is preserved."""
+        mock_parse_url.return_value = ("OpenTirZ", "test-repo")
+        mock_http_session = MagicMock()
+        mock_http_session.get.side_effect = requests.exceptions.Timeout("Secondary detail timeout")
+        mock_session.return_value = mock_http_session
+
+        mock_fetch_all.return_value = [
+            {
+                "number": 100,
+                "title": "Open PR with failing secondary request",
+                "state": "open",
+                "user": {"login": "dev1"},
+                "created_at": "2026-01-01T00:00:00Z",
+                "html_url": "https://github.com/OpenTirZ/test-repo/pull/100",
+            }
+        ]
+
+        result = get_github_prs("https://github.com/OpenTirZ/test-repo")
+        prs = result["pull_requests"]
+
+        assert len(prs) == 1
+        assert prs[0]["number"] == 100
+        assert prs[0]["title"] == "Open PR with failing secondary request"
+        assert prs[0]["author"] == "dev1"
+        assert prs[0]["state"] == "open"
+        assert prs[0]["additions"] == 0
+        assert prs[0]["reviews_count"] == 0
+
+    @patch("Backend.externalservies.github_prs._request_pr_page")
+    def test_pagination_multiple_pages(self, mock_request):
+        """Pagination correctly traverses multiple pages of pull requests."""
+        page1_response = MagicMock()
+        page1_response.ok = True
+        page1_response.status_code = 200
+        page1_response.json.return_value = [
+            {"number": i, "title": f"PR {i}", "state": "closed", "created_at": "2026-01-01T00:00:00Z"}
+            for i in range(1, 101)
+        ]
+        page1_response.links = {"next": {"url": "https://api.github.com/repos/o/r/pulls?page=2"}}
+
+        page2_response = MagicMock()
+        page2_response.ok = True
+        page2_response.status_code = 200
+        page2_response.json.return_value = [
+            {"number": i, "title": f"PR {i}", "state": "closed", "created_at": "2026-01-01T00:00:00Z"}
+            for i in range(101, 151)
+        ]
+        page2_response.links = {}
+
+        mock_request.side_effect = [page1_response, page2_response]
+
+        session = MagicMock()
+        items = _fetch_all_pr_items(session, "o", "r")
+        assert len(items) == 150
+        assert mock_request.call_count == 2
+
+    @patch("Backend.externalservies.github_prs.upsert_pull_request")
+    @patch("Backend.externalservies.github_prs.get_github_prs")
+    @patch("Backend.externalservies.github_prs._resolve_repo_url")
+    @patch("Backend.externalservies.github_prs.get_project")
+    def test_idempotent_sync_repeated_calls(
+        self,
+        mock_get_project,
+        mock_resolve,
+        mock_fetch,
+        mock_upsert,
+    ):
+        """Running sync repeatedly against the same PR data maintains idempotency."""
+        mock_get_project.return_value = {"_id": "proj_idem", "repo_url": "https://github.com/o/r"}
+        mock_resolve.return_value = "https://github.com/o/r"
+        mock_fetch.return_value = {
+            "repository": {"owner": "o", "name": "r", "full_name": "o/r", "url": "https://github.com/o/r"},
+            "pull_requests": [
+                {"number": 1, "title": "PR 1", "state": "open"},
+                {"number": 2, "title": "PR 2", "state": "merged"},
+            ],
+        }
+        mock_upsert.return_value = "pr_id"
+
+        result1 = sync_project_prs("proj_idem")
+        assert result1["fetched_count"] == 2
+        assert mock_upsert.call_count == 2
+
+        result2 = sync_project_prs("proj_idem")
+        assert result2["fetched_count"] == 2
+        assert mock_upsert.call_count == 4
+
+    @patch("Backend.externalservies.github_prs._fetch_pr_details")
+    @patch("Backend.externalservies.github_prs._fetch_all_pr_items")
+    @patch("Backend.externalservies.github_prs._get_authenticated_session")
+    @patch("Backend.externalservies.github_prs._parse_github_url")
+    def test_performance_sub_five_seconds(
+        self,
+        mock_parse_url,
+        mock_session,
+        mock_fetch_all,
+        mock_fetch_details,
+    ):
+        """PR synchronization completes in < 5 seconds for a realistic 100-PR repository."""
+        import time
+        mock_parse_url.return_value = ("OpenTirZ", "test-repo")
+        mock_session.return_value = MagicMock()
+
+        dataset = []
+        for i in range(1, 96):
+            dataset.append({
+                "number": i,
+                "title": f"Historical PR #{i}",
+                "state": "closed",
+                "user": {"login": f"committer{i % 5}"},
+                "created_at": "2026-01-01T10:00:00Z",
+                "closed_at": "2026-01-02T12:00:00Z",
+                "merged_at": "2026-01-02T12:00:00Z" if i % 2 == 0 else None,
+                "html_url": f"https://github.com/OpenTirZ/test-repo/pull/{i}",
+            })
+        for i in range(96, 101):
+            dataset.append({
+                "number": i,
+                "title": f"Active Open PR #{i}",
+                "state": "open",
+                "user": {"login": "lead"},
+                "created_at": "2026-01-10T10:00:00Z",
+                "closed_at": None,
+                "merged_at": None,
+                "html_url": f"https://github.com/OpenTirZ/test-repo/pull/{i}",
+            })
+
+        mock_fetch_all.return_value = dataset
+        mock_fetch_details.return_value = {"additions": 100, "deletions": 20, "reviews_count": 3}
+
+        start_time = time.perf_counter()
+        result = get_github_prs("https://github.com/OpenTirZ/test-repo")
+        elapsed = time.perf_counter() - start_time
+
+        assert len(result["pull_requests"]) == 100
+        assert mock_fetch_details.call_count == 5
+        assert elapsed < 5.0, f"Sync took {elapsed:.3f}s, expected < 5.0s"

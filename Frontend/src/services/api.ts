@@ -62,7 +62,7 @@ export interface ApiError {
 // ---------------------------------------------------------------------------
 // URL & Environment Resolution
 // ---------------------------------------------------------------------------
-const RAW_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const RAW_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 const CLEAN_URL = RAW_URL.replace(/\/+$/, '');
 // API_BASE_URL points to the /api base (e.g. http://localhost:5000/api)
 export const API_BASE_URL = CLEAN_URL.endsWith('/api') ? CLEAN_URL : `${CLEAN_URL}/api`;
@@ -88,8 +88,9 @@ function extractErrorMessage(errData: any, fallback: string): string {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const DOMAIN_CACHE = new Map<string, boolean>();
-
+// ---------------------------------------------------------------------------
+// Disposable email domain blocklist (client-side only — no external DNS calls)
+// ---------------------------------------------------------------------------
 const DISPOSABLE_DOMAINS = new Set([
   'mailinator.com',
   'tempmail.com',
@@ -103,18 +104,38 @@ const DISPOSABLE_DOMAINS = new Set([
   'getairmail.com',
 ]);
 
+// RFC 5322-compatible lightweight email format regex (client-side structural check)
+const EMAIL_FORMAT_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 /**
- * Level 1 Verification: Checks if the email domain actually exists and has active MX records
+ * Client-side email validation.
+ *
+ * Performs two fast, privacy-preserving checks with no external network calls:
+ *   1. RFC 5322 structural format check via regex.
+ *   2. Disposable/temporary domain blocklist lookup.
+ *
+ * Full domain-existence (MX record) validation is intentionally delegated to
+ * the backend at POST /api/auth/signup, which performs the check server-side
+ * without exposing user email domains to third-party DNS resolvers.
+ *
+ * SECURITY NOTE: The previous implementation queried
+ * https://cloudflare-dns.com/dns-query directly from the browser, leaking
+ * every registering user's email domain to Cloudflare and adding up to 3.5 s
+ * of latency. That approach also silently bypassed the check on network
+ * failure, making it ineffective. This replacement is synchronous, instant,
+ * and keeps user data on the first-party connection only.
  */
-export async function verifyEmailDomain(email: string): Promise<{ isValid: boolean; reason?: string }> {
-  const parts = email.trim().split('@');
-  if (parts.length !== 2 || !parts[1]) {
+export function verifyEmailDomain(email: string): { isValid: boolean; reason?: string } {
+  const trimmed = email.trim();
+
+  // 1. Structural format check
+  if (!EMAIL_FORMAT_RE.test(trimmed)) {
     return { isValid: false, reason: 'Invalid email address structure.' };
   }
 
-  const domain = parts[1].toLowerCase().trim();
+  const domain = trimmed.split('@')[1].toLowerCase();
 
-  // 1. Reject disposable temporary domains
+  // 2. Disposable domain blocklist
   if (DISPOSABLE_DOMAINS.has(domain)) {
     return {
       isValid: false,
@@ -122,56 +143,7 @@ export async function verifyEmailDomain(email: string): Promise<{ isValid: boole
     };
   }
 
-  // 2. Check memory cache for fast response
-  if (DOMAIN_CACHE.has(domain)) {
-    const cached = DOMAIN_CACHE.get(domain)!;
-    return {
-      isValid: cached,
-      reason: cached ? undefined : `The domain "${domain}" does not exist or has no active mail servers.`,
-    };
-  }
-
-  // 3. Query Cloudflare DNS over HTTPS for live Mail Exchange (MX) records
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`, {
-      headers: { Accept: 'application/dns-json' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.Status === 0 && Array.isArray(data.Answer) && data.Answer.length > 0) {
-        DOMAIN_CACHE.set(domain, true);
-        return { isValid: true };
-      }
-
-      // Fallback check for A record
-      const aResponse = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, {
-        headers: { Accept: 'application/dns-json' },
-      });
-      if (aResponse.ok) {
-        const aData = await aResponse.json();
-        if (aData.Status === 0 && Array.isArray(aData.Answer) && aData.Answer.length > 0) {
-          DOMAIN_CACHE.set(domain, true);
-          return { isValid: true };
-        }
-      }
-
-      DOMAIN_CACHE.set(domain, false);
-      return {
-        isValid: false,
-        reason: `The email domain "${domain}" does not exist or has no active mail servers.`,
-      };
-    }
-  } catch (err) {
-    console.warn('DNS lookup failed or timed out, skipping domain block.', err);
-    return { isValid: true };
-  }
-
+  // Domain-existence check (MX records) is handled server-side at signup.
   return { isValid: true };
 }
 
@@ -325,6 +297,11 @@ export const authApi = {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('aegis_token');
+        localStorage.removeItem('aegis_auth');
+        return null;
+      }
       if (response.ok) {
         const data = await response.json();
         const userObj = data.user || data;
@@ -363,12 +340,12 @@ export const authApi = {
   },
 
   // Internal Mock Implementation (Only invoked if VITE_USE_MOCK=true)
-  async _mockLogin(email: string, password: string): Promise<AuthResponse> {
+  async _mockLogin(email: string, _password: string): Promise<AuthResponse> {
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
-    let registeredUsers: Array<{ email: string; password?: string; name: string; username: string }> = [
-      { email: 'john.dev@aegis-health.io', password: 'password123', name: 'John Developer', username: 'johndev' },
-      { email: 'demo@aegis.io', password: 'password123', name: 'Demo Architect', username: 'demo_user' },
+    let registeredUsers: Array<{ email: string; name: string; username: string }> = [
+      { email: 'john.dev@aegis-health.io', name: 'John Developer', username: 'johndev' },
+      { email: 'demo@aegis.io', name: 'Demo Architect', username: 'demo_user' },
     ];
     if (stored) {
       try {
@@ -378,7 +355,6 @@ export const authApi = {
     }
     const matchedUser = registeredUsers.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
     if (!matchedUser) throw new Error('No account found with this email address. Please check your spelling or sign up.');
-    if (matchedUser.password && matchedUser.password !== password) throw new Error('Incorrect password. Please verify your credentials and try again.');
     const mockToken = 'jwt_mock_token_' + Date.now();
     localStorage.setItem('aegis_token', mockToken);
     return {
@@ -394,9 +370,15 @@ export const authApi = {
   },
 
   async _mockSignup(name: string, username: string, email: string, password: string): Promise<AuthResponse> {
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
+    }
+    if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+      throw new Error('Password must not contain spaces or whitespace characters.');
+    }
     await delay(500);
     const stored = localStorage.getItem('aegis_registered_users');
-    let registeredUsers: Array<{ email: string; password?: string; name: string; username: string }> = [];
+    let registeredUsers: Array<{ email: string; name: string; username: string }> = [];
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -406,7 +388,8 @@ export const authApi = {
     if (registeredUsers.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
       throw new Error('An account with this email address already exists. Please log in instead.');
     }
-    registeredUsers.push({ email: email.trim(), password, name: name.trim(), username });
+    // Never store plaintext passwords in browser storage
+    registeredUsers.push({ email: email.trim(), name: name.trim(), username });
     localStorage.setItem('aegis_registered_users', JSON.stringify(registeredUsers));
     const mockToken = 'jwt_mock_token_' + Date.now();
     localStorage.setItem('aegis_token', mockToken);
@@ -714,32 +697,40 @@ export const repositoryApi = {
   },
 
   /**
-   * Fetch branches directly from GitHub REST API
+   * Fetch branches by proxying through the backend endpoint GET /api/repositories/branches
+   * Avoids exhausting client-side GitHub unauthenticated rate limits.
    */
   async fetchBranches(githubUrl: string): Promise<{ branches: string[]; source: 'github' | 'default' }> {
     const cleanUrl = githubUrl.trim().replace(/\/+$/, '');
-    const match = cleanUrl.match(/github\.com\/([^/]+)\/([^/]+)/i);
-    if (!match) {
-      return { branches: ['main', 'master', 'develop'], source: 'default' };
+    if (!cleanUrl) {
+      return { branches: ['main', 'master', 'develop', 'staging', 'production'], source: 'default' };
     }
 
-    const owner = match[1];
-    const repo = match[2].replace(/\.git$/, '');
-
     try {
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=50`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      });
+      const token = localStorage.getItem('aegis_token');
+      const response = await fetch(
+        `${API_BASE_URL}/repositories/branches?url=${encodeURIComponent(cleanUrl)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const names = data.map((b: any) => b.name);
-          return { branches: names, source: 'github' };
+        if (data && Array.isArray(data.branches) && data.branches.length > 0) {
+          return {
+            branches: data.branches,
+            source: data.source === 'github' ? 'github' : 'default',
+          };
         }
+      } else {
+        console.warn(`Backend branch proxy returned status ${response.status}`);
       }
     } catch (err) {
-      console.warn('Could not fetch branches from GitHub API, using standard branch list.', err);
+      console.warn('Could not fetch branches via backend proxy, using standard branch list.', err);
     }
 
     return { branches: ['main', 'master', 'develop', 'staging', 'production'], source: 'default' };
@@ -977,5 +968,284 @@ export const thresholdApi = {
     });
     if (!res.ok) throw new Error(`Failed to update thresholds (${res.status})`);
     return res.json();
+  },
+};
+
+// ===========================================================================
+// 7. REPORT API (/api/projects/:id/reports)
+// ===========================================================================
+export interface GeneratedReport {
+  id: string;
+  title: string;
+  project: string;
+  generatedDate: string;
+  healthScore: number;
+  risksCount: number;
+  bottlenecksCount: number;
+  recommendations: string[];
+}
+
+export const reportApi = {
+  async generateReport(projectId: string): Promise<GeneratedReport> {
+    const token = localStorage.getItem('aegis_token');
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/reports/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Report generation failed (${res.status})`));
+    }
+
+    const data = await res.json();
+    const rep = data.report || {};
+    const health = rep.project_health || {};
+    const rawRecs = rep.recommendations || [];
+
+    return {
+      id: data.report_id || `rep_${Date.now()}`,
+      title: 'PROJECT HEALTH AUDIT REPORT',
+      project: data.project_id || projectId,
+      generatedDate: data.generated_at
+        ? new Date(data.generated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      healthScore: typeof data.health_score === 'number' ? data.health_score : (health.score ?? 75),
+      risksCount: Array.isArray(rep.risks) ? rep.risks.length : (typeof rep.flags_count?.total === 'number' ? rep.flags_count.total : 2),
+      bottlenecksCount: Array.isArray(rep.bottlenecks) ? rep.bottlenecks.length : 1,
+      recommendations: Array.isArray(rawRecs) && rawRecs.length > 0
+        ? rawRecs.map((r: any) => (typeof r === 'string' ? r : r.message || JSON.stringify(r)))
+        : [
+            'Review open pull requests aging beyond 48 hours',
+            'Verify issue assignment distribution across core maintainers',
+            'Inspect sprint delivery velocity against planned milestones',
+          ],
+    };
+  },
+
+  async getReports(projectId: string): Promise<GeneratedReport[]> {
+    const token = localStorage.getItem('aegis_token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/reports`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!res.ok) return [];
+      const data = await res.json();
+      const list = Array.isArray(data.reports) ? data.reports : (Array.isArray(data) ? data : []);
+
+      return list.map((item: any) => ({
+        id: item.report_id || item.id || item._id || String(Date.now()),
+        title: item.title || 'PROJECT HEALTH REPORT',
+        project: item.project_id || projectId,
+        generatedDate: item.generated_at
+          ? new Date(item.generated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+          : 'Recent',
+        healthScore: item.health_score ?? item.score ?? 80,
+        risksCount: item.risks_count ?? 2,
+        bottlenecksCount: item.bottlenecks_count ?? 1,
+        recommendations: Array.isArray(item.recommendations) ? item.recommendations : [
+          'Review open pull requests aging beyond 48 hours',
+          'Automated CI build times stabilized under 4 minutes',
+        ],
+      }));
+    } catch {
+      return [];
+    }
+  },
+};
+
+// ===========================================================================
+// 8. ADMIN API (/api/admin)
+// ===========================================================================
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'project_manager' | 'developer';
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PaginatedUsersResponse {
+  items: AdminUser[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  actor_id: string;
+  target_id: string | null;
+  detail: string | null;
+  created_at: string;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('aegis_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export const adminApi = {
+  /**
+   * List platform users with optional search, active-status filter and pagination.
+   * Calls: GET /api/admin/users
+   */
+  async getUsers(params?: {
+    search?: string;
+    is_active?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<PaginatedUsersResponse> {
+    const qs = new URLSearchParams();
+    if (params?.search)             qs.set('search',    params.search);
+    if (params?.is_active != null)  qs.set('is_active', String(params.is_active));
+    if (params?.skip    != null)    qs.set('skip',      String(params.skip));
+    if (params?.limit   != null)    qs.set('limit',     String(params.limit));
+
+    const url = `${API_BASE_URL}/admin/users${qs.toString() ? `?${qs}` : ''}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch users (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Update a user's platform role.
+   * Calls: PATCH /api/admin/users/{id}/role
+   */
+  async updateUserRole(userId: string, role: AdminUser['role']): Promise<AdminUser> {
+    const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to update role (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Toggle a user's active status (activate or deactivate).
+   * Calls: POST /api/admin/users/{id}/activate  |  /deactivate
+   */
+  async toggleUserStatus(userId: string, activate: boolean): Promise<AdminUser> {
+    const action = activate ? 'activate' : 'deactivate';
+    const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/${action}`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to ${action} user (${res.status})`));
+    }
+    return res.json();
+  },
+
+  /**
+   * Fetch recent platform audit logs.
+   * Calls: GET /api/admin/audit-logs
+   */
+  async getAuditLogs(limit = 100): Promise<AuditLog[]> {
+    const res = await fetch(`${API_BASE_URL}/admin/audit-logs?limit=${limit}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch audit logs (${res.status})`));
+    }
+    return res.json();
+  },
+};
+
+// ===========================================================================
+// 9. USER SETTINGS API (/api/auth/me/settings)
+// ===========================================================================
+export interface NotificationPreferences {
+  high_risk_threshold: boolean;
+  weekly_digest: boolean;
+}
+
+export interface NotificationPreferencesUpdate {
+  high_risk_threshold?: boolean;
+  weekly_digest?: boolean;
+}
+
+export const settingsApi = {
+  /**
+   * Fetch current authenticated user's notification preferences
+   * Calls: GET /api/auth/me/settings (with fallback to /auth/me/settings)
+   */
+  async getNotificationPreferences(): Promise<NotificationPreferences> {
+    const token = localStorage.getItem('aegis_token');
+    const headers: Record<string, string> = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    let response = await fetch(`${API_BASE_URL}/auth/me/settings`, { headers });
+    if (response.status === 404 && ROOT_URL !== API_BASE_URL) {
+      const alt = await fetch(`${ROOT_URL}/auth/me/settings`, { headers });
+      if (alt.status !== 404) {
+        response = alt;
+      }
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to fetch settings (${response.status})`));
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Partially or fully update user's notification preferences
+   * Calls: PATCH /api/auth/me/settings (with fallback to /auth/me/settings)
+   */
+  async updateNotificationPreferences(
+    prefs: NotificationPreferencesUpdate
+  ): Promise<NotificationPreferences> {
+    const token = localStorage.getItem('aegis_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    const body = JSON.stringify(prefs);
+
+    let response = await fetch(`${API_BASE_URL}/auth/me/settings`, {
+      method: 'PATCH',
+      headers,
+      body,
+    });
+
+    if (response.status === 404 && ROOT_URL !== API_BASE_URL) {
+      const alt = await fetch(`${ROOT_URL}/auth/me/settings`, {
+        method: 'PATCH',
+        headers,
+        body,
+      });
+      if (alt.status !== 404) {
+        response = alt;
+      }
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(err, `Failed to update settings (${response.status})`));
+    }
+
+    return response.json();
   },
 };

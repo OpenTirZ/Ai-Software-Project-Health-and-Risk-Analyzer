@@ -1,26 +1,21 @@
+
 """
 FastAPI router for AI report generation, report persistence, and report schedules.
 
 Endpoints (all under /api/projects/{project_id}/reports):
-    POST   /generate                 Run the LangGraph V2 pipeline over the project's
-                                     persisted telemetry and persist a validated JSON
-                                     status report.
-    GET    /                         List persisted reports (newest first).
-    GET    /latest                   Fetch the newest persisted report.
-    GET    /{report_id}              Fetch one persisted report.
-    DELETE /{report_id}              Delete one persisted report (admin/PM).
+    POST   /generate
+    GET    /
+    GET    /latest
+    GET    /{report_id}/pdf
+    GET    /{report_id}
+    DELETE /{report_id}
 
-Schedules (declared before the dynamic /{report_id} route):
-    POST   /schedules                Create a delivery schedule (email/slack).
-    GET    /schedules                List schedules (optional status filter).
-    PATCH  /schedules/{schedule_id}  Update frequency/destinations/status.
-    DELETE /schedules/{schedule_id}  Delete a schedule.
+Schedules:
+    POST   /schedules
+    GET    /schedules
+    PATCH  /schedules/{schedule_id}
+    DELETE /schedules/{schedule_id}
     POST   /schedules/{schedule_id}/run
-                                     Generate a report now and stamp the
-                                     schedule's lastRun/status.
-
-Telemetry is loaded with pipeline_v2.load_project_telemetry() and analyzed with
-pipeline_v2.run_analysis(); persistence goes through Backend/persistence_reports.py.
 """
 
 from __future__ import annotations
@@ -33,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from Backend.auth.dependencies import get_current_user
@@ -52,6 +48,7 @@ from Backend.persistence_reports import (
     update_report_schedule,
 )
 from Backend.routers.project_router import _get_user_id, _is_project_member
+from Backend.reporting.pdf_generator import generate_report_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -61,20 +58,11 @@ router = APIRouter(
 )
 
 
-# ---------------------------------------------------------------------------
-# LangGraph V2 pipeline loader (folder is not a package; load by file path)
-# ---------------------------------------------------------------------------
-
 _PIPELINE_MODULE_NAME = "pipeline_v2_langgraph"
 
 
 def _load_pipeline_v2():
-    """Import pipeline_v2.py from Backend/externalservies/LangGraph by path.
-
-    The LangGraph folder intentionally stays a plain directory (no package
-    marker) so the existing standalone usage keeps working; loading through
-    importlib registers the module once and reuses the compiled graph.
-    """
+    """Import pipeline_v2.py from Backend/externalservies/LangGraph by path."""
     module = sys.modules.get(_PIPELINE_MODULE_NAME)
     if module is not None:
         return module
@@ -97,17 +85,18 @@ def _load_pipeline_v2():
     return module
 
 
-# ---------------------------------------------------------------------------
-# Shared authorization helper (same rules as the data-sync router)
-# ---------------------------------------------------------------------------
-
 def _require_project_member(project_id: str, current_user: dict) -> dict:
     """Require an authenticated project owner or member."""
     user_id = _get_user_id(current_user)
 
     project = get_project(project_id)
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(status_code=404, detail="Project not found.")
 
     if not _is_project_member(project, user_id):
@@ -137,10 +126,6 @@ def _generate_and_persist_report(project_id: str) -> dict:
 def _map_value_error(exc: ValueError) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
-
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
 
 class ReportScheduleCreate(BaseModel):
     """Payload to create a report delivery schedule."""
@@ -200,10 +185,6 @@ class SimpleSuccessResponse(BaseModel):
     detail: str
 
 
-# ---------------------------------------------------------------------------
-# Report generation & persistence endpoints
-# ---------------------------------------------------------------------------
-
 @router.post(
     "/generate",
     response_model=GeneratedReportResponse,
@@ -215,11 +196,16 @@ def generate_project_report(
         require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Report generation is disabled.",
+        )
     try:
         generated = _generate_and_persist_report(project_id)
     except DatabaseError:
-        raise  # handled globally as 503
+        raise
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     except ValueError as exc:
@@ -276,18 +262,18 @@ def get_latest_report(
     return {"success": True, "project_id": project_id, "report": report}
 
 
-# ---------------------------------------------------------------------------
-# Schedule endpoints — declared BEFORE the dynamic /{report_id} route so
-# FastAPI does not capture "schedules" as a report id.
-# ---------------------------------------------------------------------------
-
 @router.post("/schedules", summary="Create a report delivery schedule")
 def create_schedule(
     project_id: str,
     payload: ReportScheduleCreate,
     current_user: dict = Depends(require_role(Role.ADMIN, Role.PROJECT_MANAGER)),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule creation is disabled.",
+        )
     try:
         schedule_id = create_report_schedule(
             project_id,
@@ -325,7 +311,12 @@ def update_schedule(
     payload: ReportScheduleUpdate,
     current_user: dict = Depends(require_role(Role.ADMIN, Role.PROJECT_MANAGER)),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule updates are disabled.",
+        )
     try:
         schedule = get_schedule(schedule_id)
         if not schedule or str(schedule.get("projectId")) != str(project_id):
@@ -354,7 +345,12 @@ def delete_schedule(
     schedule_id: str,
     current_user: dict = Depends(require_role(Role.ADMIN, Role.PROJECT_MANAGER)),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule deletion is disabled.",
+        )
     schedule = get_schedule(schedule_id)
     if not schedule or str(schedule.get("projectId")) != str(project_id):
         raise HTTPException(status_code=404, detail="Schedule not found for this project.")
@@ -373,7 +369,12 @@ def run_schedule(
         require_role(Role.ADMIN, Role.PROJECT_MANAGER, Role.DEVELOPER)
     ),
 ):
-    _require_project_member(project_id, current_user)
+    project = _require_project_member(project_id, current_user)
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=400,
+            detail="Project is archived and read-only. Schedule execution is disabled.",
+        )
     schedule = get_schedule(schedule_id)
     if not schedule or str(schedule.get("projectId")) != str(project_id):
         raise HTTPException(status_code=404, detail="Schedule not found for this project.")
@@ -402,9 +403,42 @@ def run_schedule(
     }
 
 
-# ---------------------------------------------------------------------------
-# Single-report endpoints (dynamic segment last)
-# ---------------------------------------------------------------------------
+@router.get("/{report_id}/pdf", summary="Export a report as PDF")
+def export_report_pdf(
+    project_id: str,
+    report_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    project = _require_project_member(project_id, current_user)
+
+    try:
+        report = get_report(report_id)
+    except ValueError as exc:
+        raise _map_value_error(exc)
+
+    if not report or str(report.get("projectId")) != str(project_id):
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found for this project.",
+        )
+
+    try:
+        pdf_bytes = generate_report_pdf(
+            report,
+            project_name=project.get("name"),
+        )
+    except ValueError as exc:
+        logger.exception("PDF report generation failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="project_report.pdf"'
+        },
+    )
+
 
 @router.get("/{report_id}", summary="Fetch one persisted report")
 def get_single_report(

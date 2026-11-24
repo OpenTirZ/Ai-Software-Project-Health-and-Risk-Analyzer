@@ -1,7 +1,8 @@
 """
 Pydantic schemas for auth endpoints.
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from Backend.auth.normalization import normalize_email
 
 
 # ---------------------------------------------------------------------------
@@ -13,10 +14,31 @@ class SignupRequest(BaseModel):
     email: EmailStr = Field(..., description="User's email address")
     password: str = Field(..., min_length=8, description="Password (min 8 characters)")
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_input(cls, v: str) -> str:
+        if isinstance(v, str):
+            return normalize_email(v)
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_no_whitespace(cls, v: str) -> str:
+        if any(c.isspace() for c in v):
+            raise ValueError("Password must not contain spaces or whitespace characters.")
+        return v
+
 
 class LoginRequest(BaseModel):
     email: EmailStr = Field(..., description="User's email address")
     password: str = Field(..., description="User's password")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_input(cls, v: str) -> str:
+        if isinstance(v, str):
+            return normalize_email(v)
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -39,3 +61,21 @@ class TokenResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Notification preferences schemas
+# ---------------------------------------------------------------------------
+
+class NotificationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    high_risk_threshold: bool = True
+    weekly_digest: bool = True
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    high_risk_threshold: bool | None = None
+    weekly_digest: bool | None = None

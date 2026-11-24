@@ -14,7 +14,7 @@ from bson import ObjectId, errors
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from Backend.auth.dependencies import get_current_user
-from Backend.auth.roles import Role, require_role
+from Backend.auth.roles import Role, normalize_role, require_role
 from Backend.persistence import (
     create_project,
     get_project,
@@ -51,6 +51,11 @@ def _get_user_id(current_user: dict) -> str:
             detail="Could not validate credentials.",
         )
     return str(user_id)
+
+
+def _is_global_admin(user: dict) -> bool:
+    """Return True if the user holds the system admin role (bypasses project membership)."""
+    return normalize_role(user.get("role")) == Role.ADMIN.value
 
 
 def _is_project_owner(project: dict, user_id: str) -> bool:
@@ -145,11 +150,24 @@ def list_projects_endpoint(
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
+    # Admins see all projects they were fetched for; non-admins are
+    # strictly filtered to verified ownership or membership.
+    if _is_global_admin(current_user):
+        from Backend.persistence import get_projects
+        try:
+            all_projects = get_projects()
+        except DatabaseError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        return [ProjectResponse.from_doc(p) for p in all_projects]
+
     # Strictly enforce verified ownership or membership
     user_projects = [
         ProjectResponse.from_doc(p)
         for p in projects
         if _is_project_member(p, user_id)
+        and p.get("status") != "deleted"
+        and p.get("is_active") is not False
+        and p.get("deletion_status") not in ("pending", "completed")
     ]
     return user_projects
 
@@ -175,13 +193,18 @@ def get_project_endpoint(
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
         )
 
-    if not _is_project_member(project, user_id):
+    if not _is_project_member(project, user_id) and not _is_global_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. You are not a member of this project.",
@@ -214,10 +237,21 @@ def update_project_endpoint(
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
+        )
+
+    if project.get("status") == "archived":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is archived and read-only. Configuration updates are disabled.",
         )
 
     if (

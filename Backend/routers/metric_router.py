@@ -40,6 +40,7 @@ from Backend.persistence import (
     get_project_issues,
     get_project_pull_requests,
     get_project_sprints,
+    get_approved_appeal_flag_ids,
 )
 
 logger = logging.getLogger(__name__)
@@ -173,7 +174,12 @@ def _fetch_project_data(project_id: str, current_user: dict) -> tuple[dict, list
             detail="Database service unavailable.",
         )
 
-    if not project:
+    if (
+        not project
+        or project.get("status") == "deleted"
+        or project.get("is_active") is False
+        or project.get("deletion_status") in ("pending", "completed")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found.",
@@ -250,6 +256,21 @@ def get_health_summary_endpoint(
         issues=issues,
         sprints=sprints,
     )
+
+    # An approved appeal suppresses only the contested flag; source telemetry
+    # and the underlying health score remain unchanged.
+    suppressed_flag_ids = get_approved_appeal_flag_ids(id)
+    summary["active_flags"] = [
+        flag for flag in summary.get("active_flags", [])
+        if flag.get("id") not in suppressed_flag_ids
+    ]
+    visible_flags = summary["active_flags"]
+    summary["flags_count"] = {
+        "total": len(visible_flags),
+        "high": sum(1 for flag in visible_flags if flag.get("severity") == "high"),
+        "medium": sum(1 for flag in visible_flags if flag.get("severity") == "medium"),
+        "low": sum(1 for flag in visible_flags if flag.get("severity") == "low"),
+    }
     return summary
 
 
@@ -279,6 +300,14 @@ def get_metrics_breakdown_endpoint(
         issues=issues,
         sprints=sprints,
     )
+
+    # Suppress flags whose appeals have been approved.
+    suppressed_flag_ids = get_approved_appeal_flag_ids(id)
+    for indicator in breakdown.get("indicators", {}).values():
+        indicator["flags"] = [
+            flag for flag in indicator.get("flags", [])
+            if flag.get("id") not in suppressed_flag_ids
+        ]
 
     # Generate grounded, advisory-only engineering recommendations.
     # If recommendation generation fails, metrics are still returned.

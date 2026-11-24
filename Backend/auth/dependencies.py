@@ -49,4 +49,11 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
+    if user.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is deactivated.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user

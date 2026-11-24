@@ -30,7 +30,7 @@ from unittest.mock import patch
 import pytest
 import pymongo
 from bson import ObjectId
-from pymongo import MongoClient
+from pymongo.synchronous.mongo_client import MongoClient as RealMongoClient
 from pymongo.errors import DuplicateKeyError
 
 MONGOD_PATH = r"C:\Program Files\MongoDB\Server\9.0\bin\mongod.exe"
@@ -62,7 +62,7 @@ def real_mongo():
         # Wait up to 5 seconds for mongod to accept connections
         for _ in range(50):
             try:
-                client = MongoClient(TEST_URI, serverSelectionTimeoutMS=200)
+                client = RealMongoClient(TEST_URI, serverSelectionTimeoutMS=200)
                 client.admin.command("ping")
                 break
             except Exception:
@@ -176,7 +176,8 @@ class TestRealMongoDBMilestones:
         with patch("Backend.externalservies.github_milestones._fetch_all_milestones", return_value=mock_payload_v1), \
              patch("Backend.externalservies.github_milestones._get_authenticated_session"), \
              patch("Backend.externalservies.github_milestones.get_project", return_value=clean_db.projects.find_one({"_id": ObjectId(project_id)})), \
-             patch("Backend.persistence_telemetry.milestones_collection", clean_db.milestones):
+             patch("Backend.persistence_telemetry.milestones_collection", clean_db.milestones), \
+             patch("Backend.persistence.projects_collection", clean_db.projects):
 
             # --- RUN 1: Initial Sync ---
             result1 = sync_project_milestones(project_id)
@@ -253,7 +254,8 @@ class TestRealMongoDBMilestones:
         payload_b = [{"number": 1, "title": "Beta Sprint", "state": "closed", "open_issues": 0, "closed_issues": 10}]
 
         with patch("Backend.externalservies.github_milestones._get_authenticated_session"), \
-             patch("Backend.persistence_telemetry.milestones_collection", clean_db.milestones):
+             patch("Backend.persistence_telemetry.milestones_collection", clean_db.milestones), \
+             patch("Backend.persistence.projects_collection", clean_db.projects):
 
             with patch("Backend.externalservies.github_milestones._fetch_all_milestones", return_value=payload_a), \
                  patch("Backend.externalservies.github_milestones.get_project", return_value=clean_db.projects.find_one({"_id": ObjectId(proj_a)})):
@@ -356,7 +358,8 @@ class TestRealMongoDBMilestones:
                  patch("Backend.externalservies.github_milestones._get_authenticated_session"), \
                  patch("Backend.externalservies.github_milestones.get_project", return_value=clean_db.projects.find_one({"_id": proj_oid})), \
                  patch("Backend.routers.data_sync_router._require_project_member"), \
-                 patch("Backend.persistence_telemetry.milestones_collection", clean_db.milestones):
+                 patch("Backend.persistence_telemetry.milestones_collection", clean_db.milestones), \
+                 patch("Backend.persistence.projects_collection", clean_db.projects):
 
                 # 1. Trigger POST /sync-milestones
                 sync_resp = client.post(f"/api/projects/{project_id}/sync-milestones")

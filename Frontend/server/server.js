@@ -1,16 +1,30 @@
-// Aegis AI - Backend API Server (Sprint 1)
+// कVaच (Kavach) - Backend API Server (Sprint 1)
 // Implements: Authentication API, Project API, Repository API
 // Supports both /api/* and root /* route paths for universal test runner compatibility.
 
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Origin not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -24,7 +38,7 @@ const users = [
     name: 'John Developer',
     username: 'johndev',
     email: 'john.dev@aegis-health.io',
-    password: 'password123',
+    passwordHash: bcrypt.hashSync('password123', 12),
     role: 'Lead Architect',
     team: 'Enterprise Core Platform',
     createdAt: new Date().toISOString(),
@@ -34,7 +48,7 @@ const users = [
     name: 'Demo Architect',
     username: 'demo_user',
     email: 'demo@aegis.io',
-    password: 'password123',
+    passwordHash: bcrypt.hashSync('password123', 12),
     role: 'Staff Engineer',
     team: 'Cloud Infrastructure',
     createdAt: new Date().toISOString(),
@@ -68,38 +82,67 @@ const repositories = [
   },
 ];
 
-const tokens = new Map(); // token -> userId
+const tokens = new Map();
 
-// Utility: Generate Token
+// Generate Token
 function generateToken(userId) {
   const token = 'jwt_' + crypto.randomBytes(24).toString('hex');
   tokens.set(token, userId);
   return token;
 }
 
-// Utility: Authentication Middleware
+// Authentication Middleware
+
+
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const authHeader = req.headers.authorization;
 
-  if (!token) {
-    return res.status(401).json({ message: 'Authentication required. No token provided.', detail: 'Authentication required.' });
+  if (!authHeader) {
+    return res.status(401).json({
+      message: 'Authentication required. No token provided.',
+      detail: 'Authentication required.',
+    });
   }
 
-  // Allow mock tokens or generated tokens
-  if (token.startsWith('jwt_') || token.length > 10) {
-    const userId = tokens.get(token);
-    const user = users.find((u) => u.id === userId) || users[0];
-    req.user = user;
-    return next();
+  const [scheme, token] = authHeader.split(' ');
+
+  if (scheme?.toLowerCase() !== 'bearer' || !token) {
+    return res.status(401).json({
+      message: 'Invalid authorization format.',
+      detail: 'Use Bearer token authentication.',
+    });
   }
 
-  return res.status(403).json({ message: 'Invalid or expired authentication token.', detail: 'Invalid or expired token.' });
+  const userId = tokens.get(token);
+
+  if (!userId) {
+    return res.status(403).json({
+      message: 'Invalid or expired authentication token.',
+      detail: 'Invalid or expired token.',
+    });
+  }
+
+  const user = users.find((u) => u.id === userId);
+
+  if (!user) {
+    return res.status(403).json({
+      message: 'Invalid or expired authentication token.',
+      detail: 'Invalid or expired token.',
+    });
+  }
+
+  req.user = user;
+  req.token = token;
+
+  return next();
 }
+
+
 
 // ==========================================
 // 1. HEALTH CHECK API
 // ==========================================
+
 const handleHealth = (req, res) => {
   res.json({
     status: 'healthy',
@@ -123,10 +166,10 @@ app.get('/api/health', handleHealth);
 app.get('/health', handleHealth);
 
 // ==========================================
-// 2. AUTHENTICATION API (Supports /api/auth and /auth)
+// 2. AUTHENTICATION API
 // ==========================================
 
-const handleSignup = (req, res) => {
+const handleSignup = async (req, res) => {
   const { name, username, email, password } = req.body || {};
 
   if (!email || !password || !name) {
@@ -136,7 +179,22 @@ const handleSignup = (req, res) => {
     });
   }
 
+  if (password.length < 8) {
+    return res.status(400).json({
+      message: 'Password must be at least 8 characters.',
+      detail: 'Password must be at least 8 characters.',
+    });
+  }
+
+  if (/[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(password)) {
+    return res.status(400).json({
+      message: 'Password must not contain spaces or whitespace characters.',
+      detail: 'Password must not contain spaces or whitespace characters.',
+    });
+  }
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   if (!emailRegex.test(email)) {
     return res.status(400).json({
       message: 'Invalid email address format.',
@@ -144,7 +202,10 @@ const handleSignup = (req, res) => {
     });
   }
 
-  const existingEmail = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+  const existingEmail = users.find(
+    (u) => u.email.toLowerCase() === email.trim().toLowerCase()
+  );
+
   if (existingEmail) {
     return res.status(409).json({
       message: 'An account with this email address already exists. Please log in.',
@@ -152,8 +213,14 @@ const handleSignup = (req, res) => {
     });
   }
 
-  const cleanUsername = (username || email.split('@')[0]).replace(/^@/, '').trim();
-  const existingUsername = users.find((u) => u.username.toLowerCase() === cleanUsername.toLowerCase());
+  const cleanUsername = (username || email.split('@')[0])
+    .replace(/^@/, '')
+    .trim();
+
+  const existingUsername = users.find(
+    (u) => u.username.toLowerCase() === cleanUsername.toLowerCase()
+  );
+
   if (existingUsername) {
     return res.status(409).json({
       message: `Username "@${cleanUsername}" is already taken. Please choose another.`,
@@ -161,17 +228,20 @@ const handleSignup = (req, res) => {
     });
   }
 
+  const passwordHash = await bcrypt.hash(password, 12);
+
   const newUser = {
     id: 'usr_' + crypto.randomBytes(6).toString('hex'),
     name: name.trim(),
     username: cleanUsername,
     email: email.trim().toLowerCase(),
-    password,
+    passwordHash,
     role: 'developer',
     createdAt: new Date().toISOString(),
   };
 
   users.push(newUser);
+
   const token = generateToken(newUser.id);
 
   console.log(`[AUTH] User registered: ${newUser.email} (@${newUser.username})`);
@@ -195,7 +265,7 @@ const handleSignup = (req, res) => {
   });
 };
 
-const handleLogin = (req, res) => {
+const handleLogin = async (req, res) => {
   const { email, password } = req.body || {};
 
   if (!email || !password) {
@@ -205,7 +275,10 @@ const handleLogin = (req, res) => {
     });
   }
 
-  const user = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+  const user = users.find(
+    (u) => u.email.toLowerCase() === email.trim().toLowerCase()
+  );
+
   if (!user) {
     return res.status(404).json({
       message: 'No account found with this email address. Please check your spelling or sign up.',
@@ -213,7 +286,9 @@ const handleLogin = (req, res) => {
     });
   }
 
-  if (user.password !== password) {
+  const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+
+  if (!passwordMatches) {
     return res.status(401).json({
       message: 'Incorrect password. Please verify your credentials and try again.',
       detail: 'Incorrect password. Please verify your credentials and try again.',
@@ -221,6 +296,7 @@ const handleLogin = (req, res) => {
   }
 
   const token = generateToken(user.id);
+
   console.log(`[AUTH] User logged in: ${user.email}`);
 
   const userOut = {
@@ -258,9 +334,15 @@ const handleMe = (req, res) => {
   });
 };
 
+
 const handleLogout = (req, res) => {
-  return res.json({ message: 'Logged out successfully.' });
+  tokens.delete(req.token);
+
+  return res.json({
+    message: 'Logged out successfully.',
+  });
 };
+
 
 // Mount Auth routes under both /api/auth and /auth
 app.post('/api/auth/signup', handleSignup);
@@ -273,7 +355,7 @@ app.post('/api/auth/logout', authenticateToken, handleLogout);
 app.post('/auth/logout', authenticateToken, handleLogout);
 
 // ==========================================
-// 3. PROJECT API (Supports /api/projects and /projects)
+// 3. PROJECT API
 // ==========================================
 
 const handleCreateProject = (req, res) => {
@@ -287,7 +369,11 @@ const handleCreateProject = (req, res) => {
   }
 
   const trimmedName = name.trim();
-  const duplicate = projects.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+
+  const duplicate = projects.find(
+    (p) => p.name.toLowerCase() === trimmedName.toLowerCase()
+  );
+
   if (duplicate) {
     return res.status(409).json({
       message: `A project with the name "${trimmedName}" already exists.`,
@@ -309,9 +395,9 @@ const handleCreateProject = (req, res) => {
   };
 
   projects.unshift(newProject);
+
   console.log(`[PROJECT] Created project: ${newProject.name} (${newProject.id})`);
 
-  // Return both top-level and nested structure so any response mapping succeeds
   return res.status(201).json({
     id: newProject.id,
     _id: newProject.id,
@@ -334,9 +420,14 @@ const handleListProjects = (req, res) => {
 
 const handleGetProject = (req, res) => {
   const project = projects.find((p) => p.id === req.params.id);
+
   if (!project) {
-    return res.status(404).json({ message: 'Project not found.', detail: 'Project not found.' });
+    return res.status(404).json({
+      message: 'Project not found.',
+      detail: 'Project not found.'
+    });
   }
+
   return res.json({
     id: project.id,
     _id: project.id,
@@ -355,14 +446,21 @@ const handleGetProject = (req, res) => {
 
 const handlePatchProject = (req, res) => {
   const project = projects.find((p) => p.id === req.params.id);
+
   if (!project) {
-    return res.status(404).json({ message: 'Project not found.', detail: 'Project not found.' });
+    return res.status(404).json({
+      message: 'Project not found.',
+      detail: 'Project not found.'
+    });
   }
+
   const { name, description, repo_url, default_branch } = req.body || {};
+
   if (name) project.name = name.trim();
   if (description !== undefined) project.description = description;
   if (repo_url) project.repo_url = repo_url;
   if (default_branch) project.default_branch = default_branch;
+
   project.updatedAt = new Date().toISOString();
 
   return res.json({
@@ -392,7 +490,7 @@ app.patch('/api/projects/:id', handlePatchProject);
 app.patch('/projects/:id', handlePatchProject);
 
 // ==========================================
-// 4. REPOSITORY API (Supports /api/repositories and /repositories)
+// 4. REPOSITORY API
 // ==========================================
 
 const handleConnectRepository = (req, res) => {
@@ -406,7 +504,10 @@ const handleConnectRepository = (req, res) => {
   }
 
   const cleanUrl = githubUrl.trim().replace(/\/+$/, '');
-  const match = cleanUrl.match(/github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/i);
+
+  const match = cleanUrl.match(
+    /github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/i
+  );
 
   if (!match) {
     return res.status(400).json({
@@ -425,8 +526,10 @@ const handleConnectRepository = (req, res) => {
     });
   }
 
-  // Check if repository is already connected
-  const existing = repositories.find((r) => r.githubUrl.toLowerCase() === cleanUrl.toLowerCase());
+  const existing = repositories.find(
+    (r) => r.githubUrl.toLowerCase() === cleanUrl.toLowerCase()
+  );
+
   if (existing) {
     return res.status(409).json({
       message: `The repository "${owner}/${repoSlug}" is already connected to this workspace.`,
@@ -446,9 +549,9 @@ const handleConnectRepository = (req, res) => {
 
   repositories.unshift(newRepo);
 
-  // Also associate with project in store if projectId matches
   if (projectId) {
     const proj = projects.find((p) => p.id === projectId);
+
     if (proj) {
       proj.repo_url = cleanUrl;
       proj.default_branch = branch || 'main';
@@ -480,12 +583,21 @@ const handleBranches = async (req, res) => {
   const token = req.query.token;
 
   if (!githubUrl || typeof githubUrl !== 'string') {
-    return res.json({ branches: ['main', 'master', 'develop'], source: 'default' });
+    return res.json({
+      branches: ['main', 'master', 'develop'],
+      source: 'default'
+    });
   }
 
-  const match = githubUrl.trim().replace(/\/+$/, '').match(/github\.com\/([^/]+)\/([^/]+)/i);
+  const match = githubUrl.trim().replace(/\/+$/, '').match(
+    /github\.com\/([^/]+)\/([^/]+)/i
+  );
+
   if (!match) {
-    return res.json({ branches: ['main', 'master', 'develop'], source: 'default' });
+    return res.json({
+      branches: ['main', 'master', 'develop'],
+      source: 'default'
+    });
   }
 
   const owner = match[1];
@@ -496,16 +608,19 @@ const handleBranches = async (req, res) => {
       Accept: 'application/vnd.github.v3+json',
       'User-Agent': 'Aegis-AI-Service',
     };
+
     if (token) {
       headers.Authorization = `token ${token}`;
     }
 
-    const ghResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=50`, {
-      headers,
-    });
+    const ghResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/branches?per_page=50`,
+      { headers }
+    );
 
     if (ghResponse.ok) {
       const data = await ghResponse.json();
+
       if (Array.isArray(data) && data.length > 0) {
         return res.json({
           branches: data.map((b) => b.name),
@@ -531,13 +646,26 @@ app.get('/repositories', handleListRepositories);
 app.get('/api/repositories/branches', handleBranches);
 app.get('/repositories/branches', handleBranches);
 
+// Handle errors
+app.use((err, req, res, _next) => {
+  if (err.message === 'Origin not allowed by CORS') {
+    return res.status(403).json({
+      message: 'Origin not allowed by CORS',
+    });
+  }
+
+  return res.status(500).json({
+    message: 'Internal server error',
+  });
+});
+
 // Start Express Server
 app.listen(PORT, () => {
   console.log(`\n=================================================`);
-  console.log(`🚀 Aegis AI Backend API running at http://localhost:${PORT}`);
-  console.log(`   - Authentication API: http://localhost:${PORT}/api/auth/login`);
-  console.log(`   - Project API:        http://localhost:${PORT}/api/projects`);
-  console.log(`   - Repository API:     http://localhost:${PORT}/api/repositories/connect`);
-  console.log(`   - Health Check:       http://localhost:${PORT}/api/health`);
+  console.log(`Aegis AI Backend API running at http://localhost:${PORT}`);
+  console.log(`Authentication API: http://localhost:${PORT}/api/auth/login`);
+  console.log(`Project API: http://localhost:${PORT}/api/projects`);
+  console.log(`Repository API: http://localhost:${PORT}/api/repositories/connect`);
+  console.log(`Health Check: http://localhost:${PORT}/api/health`);
   console.log(`=================================================\n`);
 });

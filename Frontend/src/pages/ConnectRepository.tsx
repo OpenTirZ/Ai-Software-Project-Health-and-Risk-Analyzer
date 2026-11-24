@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import type { PageView, Repository } from '../types';
-import { 
-  GitBranch, 
-  ArrowLeft, 
-  AlertCircle, 
-  Loader2, 
-  CheckCircle2, 
-  ShieldCheck, 
+import {
+  GitBranch,
+  ArrowLeft,
+  AlertCircle,
+  Loader2,
+  CheckCircle2,
+  ShieldCheck,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
 } from 'lucide-react';
 import { repositoryApi, type ProjectResponse } from '../services/api';
 
@@ -18,6 +18,9 @@ interface ConnectRepositoryProps {
   onNavigate: (view: PageView) => void;
 }
 
+const githubRegex =
+  /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/?$/;
+
 export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
   project,
   onRepoConnected,
@@ -25,13 +28,22 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
 }) => {
   const [githubUrl, setGithubUrl] = useState('');
   const [branch, setBranch] = useState('main');
-  const [branches, setBranches] = useState<string[]>(['main', 'master', 'develop']);
+  const [branches, setBranches] = useState<string[]>([
+    'main',
+    'master',
+    'develop',
+  ]);
   const [isFetchingBranches, setIsFetchingBranches] = useState(false);
-  const [branchSource, setBranchSource] = useState<'github' | 'default' | null>(null);
+  const [branchSource, setBranchSource] = useState<
+    'github' | 'default' | null
+  >(null);
   const [isCustomBranch, setIsCustomBranch] = useState(false);
   const [customBranchInput, setCustomBranchInput] = useState('');
 
-  const [errors, setErrors] = useState<{ githubUrl?: string; branch?: string }>({});
+  const [errors, setErrors] = useState<{
+    githubUrl?: string;
+    branch?: string;
+  }>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -41,30 +53,31 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
 
   const fetchBranchesForRepo = async (urlToFetch?: string) => {
     const url = (urlToFetch || githubUrl).trim();
-    if (!url) return;
 
-    const githubRegex = /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/?$/;
-    if (!githubRegex.test(url)) return;
+    if (!url || !githubRegex.test(url)) return;
 
     setIsFetchingBranches(true);
     setApiError(null);
+
     try {
-      const res = await repositoryApi.fetchBranches(url);
-      if (res.branches && res.branches.length > 0) {
-        setBranches(res.branches);
-        setBranchSource(res.source);
-        // Default to main or master if available, otherwise first branch
-        if (res.branches.includes('main')) {
+      const response = await repositoryApi.fetchBranches(url);
+
+      if (response.branches && response.branches.length > 0) {
+        setBranches(response.branches);
+        setBranchSource(response.source);
+
+        if (response.branches.includes('main')) {
           setBranch('main');
-        } else if (res.branches.includes('master')) {
+        } else if (response.branches.includes('master')) {
           setBranch('master');
         } else {
-          setBranch(res.branches[0]);
+          setBranch(response.branches[0]);
         }
+
         setIsCustomBranch(false);
+        setCustomBranchInput('');
       }
     } catch {
-      // Fallback already handled
     } finally {
       setIsFetchingBranches(false);
     }
@@ -75,14 +88,15 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
 
     if (!githubUrl.trim()) {
       newErrors.githubUrl = 'GitHub repository URL is required.';
-    } else {
-      const githubRegex = /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/?$/;
-      if (!githubRegex.test(githubUrl.trim())) {
-        newErrors.githubUrl = 'Invalid URL. Please enter a valid GitHub repository URL (e.g. https://github.com/owner/repository).';
-      }
+    } else if (!githubRegex.test(githubUrl.trim())) {
+      newErrors.githubUrl =
+        'Invalid URL. Enter a valid GitHub repository URL (e.g. https://github.com/owner/repository).';
     }
 
-    const selectedBranch = isCustomBranch ? customBranchInput.trim() : branch.trim();
+    const selectedBranch = isCustomBranch
+      ? customBranchInput.trim()
+      : branch.trim();
+
     if (!selectedBranch) {
       newErrors.branch = 'Please select or enter a branch name.';
     }
@@ -91,17 +105,18 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setApiError(null);
 
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
 
-    const targetBranch = isCustomBranch ? customBranchInput.trim() : branch.trim() || 'main';
+    const targetBranch = isCustomBranch
+      ? customBranchInput.trim()
+      : branch.trim() || 'main';
 
     setIsLoading(true);
+
     try {
       const repoResponse = await repositoryApi.connectRepository({
         projectId,
@@ -109,263 +124,324 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
         branch: targetBranch,
       });
 
-      // Construct Repository object for application state
       const newRepo: Repository = {
         id: repoResponse.id,
         name: repoResponse.repoName,
         branch: repoResponse.branch,
-        healthScore: 88,
-        riskClassification: 'LOW RISK',
-        lastAudit: 'Just now',
         description: `Connected to project "${projectName}". Real-time telemetry enabled.`,
         monitored: true,
       };
 
       setSuccess(true);
+
       setTimeout(() => {
         onRepoConnected(newRepo);
         onNavigate('overview');
       }, 900);
     } catch (err: any) {
-      setApiError(err.message || 'Failed to connect repository. Please verify URL and credentials.');
+      setApiError(
+        err.message ||
+          'Failed to connect repository. Please verify URL and credentials.'
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
-      {/* Top Navigation */}
-      <div className="flex items-center justify-between">
+    <main className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
+          type="button"
           onClick={() => onNavigate('create-project')}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-medium transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 self-start text-sm font-medium text-slate-600 hover:text-[#0B6B63] focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Project Details</span>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Project Details
         </button>
 
-        <span className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-semibold border border-indigo-200">
-          Project: {projectName}
+        <span className="inline-flex w-fit items-center rounded-lg border border-[#9ED4C8] bg-white px-3 py-2 text-xs font-medium text-slate-700">
+          Project:
+          <span className="ml-1 font-semibold text-[#0B6B63]">
+            {projectName}
+          </span>
         </span>
       </div>
 
-      {/* Stepper Wizard Indicator */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 md:p-6 shadow-sm">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
-          {/* Step 1 */}
+      <section className="rounded-xl border border-[#9ED4C8] bg-white p-5 sm:p-6">
+        <div className="mx-auto flex max-w-lg items-center">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-emerald-200">
-              ✓
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0B6B63] text-white">
+              <CheckCircle2 className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Step 1</p>
-              <p className="text-sm font-semibold text-slate-900">Project Details</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#0B6B63]">
+                Step 1
+              </p>
+              <p className="text-sm font-semibold text-slate-900">
+                Project Details
+              </p>
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="flex-1 h-0.5 bg-emerald-500 mx-4" />
+          <div className="mx-4 h-px flex-1 bg-[#0B6B63]" />
 
-          {/* Step 2 */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-indigo-200">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0B6B63] text-sm font-bold text-white">
               2
             </div>
             <div>
-              <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Step 2</p>
-              <p className="text-sm font-semibold text-slate-900">Connect GitHub</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#0B6B63]">
+                Step 2
+              </p>
+              <p className="text-sm font-semibold text-slate-900">
+                Connect GitHub
+              </p>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Form Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 md:p-8">
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+      <section className="rounded-xl border border-[#9ED4C8] bg-white p-5 sm:p-8">
+        <div className="mb-7">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#0B6B63]">
+            Repository integration
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             Connect GitHub Repository
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Provide the GitHub repository URL to initiate commit telemetry, PR risk classification, and code churn analysis.
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Provide the GitHub repository URL to initiate commit telemetry,
+            pull request risk classification, and code churn analysis.
           </p>
         </div>
 
-        {/* Backend Error Alert */}
         {apiError && (
-          <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2.5">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-500" />
+          <div
+            role="alert"
+            className="mb-6 flex items-start gap-3 rounded-lg border border-[#CC1F2E]/20 bg-[#CC1F2E]/5 p-4 text-sm text-[#CC1F2E]"
+          >
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <p className="font-semibold">Connection Error</p>
-              <p className="text-xs mt-0.5">{apiError}</p>
+              <p className="mt-1 text-xs">{apiError}</p>
             </div>
           </div>
         )}
 
-        {/* Success Alert */}
         {success && (
-          <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div
+            role="status"
+            className="mb-6 flex items-center gap-3 rounded-lg border border-[#0B6B63]/20 bg-[#CDEFE6] p-4 text-sm text-[#0B6B63]"
+          >
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
             <div>
-              <p className="font-semibold">Repository Connected Successfully!</p>
-              <p className="text-xs text-emerald-700 mt-0.5">Redirecting to Project Overview dashboard...</p>
+              <p className="font-semibold">
+                Repository Connected Successfully!
+              </p>
+              <p className="mt-1 text-xs">
+                Redirecting to Project Overview...
+              </p>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-          {/* Provider Selection */}
+        <form onSubmit={handleSubmit} className="space-y-7" noValidate>
+
           <div>
-            <label className="text-sm font-bold text-slate-900 mb-2 block">
+            <p className="mb-3 text-sm font-semibold text-slate-900">
               Git Provider
-            </label>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border-2 border-indigo-600 bg-indigo-50/50 text-indigo-900 font-semibold text-sm">
-                <svg className="w-5 h-5 fill-current text-slate-900" viewBox="0 0 24 24">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                </svg>
-                <span>GitHub</span>
-                <span className="text-[10px] bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded font-bold uppercase ml-1">Default</span>
-              </div>
+            </p>
+
+            <div className="inline-flex items-center gap-3 rounded-lg border border-[#0B6B63] bg-[#CDEFE6] px-4 py-3 text-sm font-semibold text-[#0B6B63]">
+              <svg
+                className="h-5 w-5 fill-current"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+              </svg>
+              GitHub
+              <span className="rounded bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#0B6B63]">
+                Default
+              </span>
             </div>
           </div>
 
-          {/* GitHub Repository URL */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <ExternalLink className="w-4 h-4 text-indigo-500" />
-                <span>GitHub Repository URL <span className="text-rose-500">*</span></span>
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label
+                htmlFor="github-url"
+                className="flex items-center gap-2 text-sm font-semibold text-slate-900"
+              >
+                <ExternalLink className="h-4 w-4 text-[#0B6B63]" />
+                GitHub Repository URL
+                <span className="text-[#CC1F2E]">*</span>
               </label>
 
-              {/* Fetch branches action button */}
               <button
                 type="button"
                 disabled={isFetchingBranches || !githubUrl.trim()}
                 onClick={() => fetchBranchesForRepo()}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-40 transition-colors flex items-center gap-1 cursor-pointer"
                 title="Fetch all branches from GitHub"
+                className="inline-flex items-center gap-2 self-start text-xs font-semibold text-[#0B6B63] hover:underline focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 sm:self-auto"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingBranches ? 'animate-spin' : ''}`} />
-                <span>Fetch Branches</span>
+                <RefreshCw className="h-3.5 w-3.5" />
+                {isFetchingBranches ? 'Fetching branches...' : 'Fetch Branches'}
               </button>
             </div>
 
-            <div className={`relative rounded-xl border shadow-sm transition-all overflow-hidden bg-slate-50/50 flex items-center ${
-              errors.githubUrl ? 'border-rose-400 focus-within:ring-2 focus-within:ring-rose-100' : 'border-slate-300 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100'
-            }`}>
-              <input
-                type="url"
-                disabled={isLoading}
-                value={githubUrl}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setGithubUrl(val);
-                  if (errors.githubUrl) setErrors((prev) => ({ ...prev, githubUrl: undefined }));
-                }}
-                onBlur={() => {
-                  if (githubUrl.trim() && branchSource !== 'github') {
-                    fetchBranchesForRepo(githubUrl);
-                  }
-                }}
-                placeholder="Enter your GitHub repository link (e.g. https://github.com/owner/repository)"
-                className="w-full px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent disabled:opacity-60"
-              />
-            </div>
-            {errors.githubUrl && (
-              <p className="text-xs text-rose-600 mt-1.5 font-medium flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" />
+            <input
+              id="github-url"
+              type="url"
+              disabled={isLoading}
+              value={githubUrl}
+              onChange={(event) => {
+                const value = event.target.value;
+                setGithubUrl(value);
+
+                if (errors.githubUrl) {
+                  setErrors((previous) => ({
+                    ...previous,
+                    githubUrl: undefined,
+                  }));
+                }
+
+                if (branchSource === 'github') {
+                  setBranchSource(null);
+                }
+              }}
+              onBlur={() => {
+                if (githubUrl.trim() && branchSource !== 'github') {
+                  fetchBranchesForRepo(githubUrl);
+                }
+              }}
+              placeholder="https://github.com/owner/repository"
+              aria-invalid={Boolean(errors.githubUrl)}
+              aria-describedby={
+                errors.githubUrl ? 'github-url-error' : 'github-url-help'
+              }
+              className={`w-full rounded-lg border bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-[#0B6B63]/15 disabled:opacity-60 ${
+                errors.githubUrl
+                  ? 'border-[#CC1F2E] focus:border-[#CC1F2E]'
+                  : 'border-[#9ED4C8] focus:border-[#0B6B63]'
+              }`}
+            />
+
+            {errors.githubUrl ? (
+              <p
+                id="github-url-error"
+                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[#CC1F2E]"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
                 {errors.githubUrl}
+              </p>
+            ) : (
+              <p id="github-url-help" className="mt-2 text-xs text-slate-500">
+                Enter the HTTPS URL of the GitHub repository you want to monitor.
               </p>
             )}
           </div>
 
-          {/* Default Branch Dropdown */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <GitBranch className="w-4 h-4 text-indigo-500" />
-                <span>Default Branch <span className="text-rose-500">*</span></span>
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label
+                htmlFor="default-branch"
+                className="flex items-center gap-2 text-sm font-semibold text-slate-900"
+              >
+                <GitBranch className="h-4 w-4 text-[#0B6B63]" />
+                Default Branch
+                <span className="text-[#CC1F2E]">*</span>
               </label>
 
               {isFetchingBranches ? (
-                <span className="text-xs text-indigo-600 font-medium flex items-center gap-1.5 animate-pulse">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span className="inline-flex items-center gap-2 text-xs font-medium text-[#B45309]">
+                  <Loader2 className="h-3.5 w-3.5" />
                   Fetching remote branches...
                 </span>
               ) : branchSource === 'github' ? (
-                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#0B6B63]">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
                   {branches.length} branches loaded from GitHub
                 </span>
               ) : null}
             </div>
 
-            {/* Dropdown Menu */}
-            <div className={`relative rounded-xl border shadow-sm transition-all overflow-hidden bg-slate-50/50 ${
-              errors.branch ? 'border-rose-400 focus-within:ring-2 focus-within:ring-rose-100' : 'border-slate-300 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100'
-            }`}>
-              <select
-                disabled={isLoading || isFetchingBranches}
-                value={isCustomBranch ? '__custom__' : branch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '__custom__') {
-                    setIsCustomBranch(true);
-                  } else {
-                    setIsCustomBranch(false);
-                    setBranch(val);
-                  }
-                  if (errors.branch) setErrors((prev) => ({ ...prev, branch: undefined }));
-                }}
-                className="w-full px-4 py-3 text-sm text-slate-800 bg-transparent focus:outline-none cursor-pointer disabled:opacity-60"
-              >
-                {branches.map((b) => (
-                  <option key={b} value={b} className="py-1">
-                    {b} {b === 'main' || b === 'master' ? '(default)' : ''}
-                  </option>
-                ))}
-                <option value="__custom__" className="font-semibold text-indigo-600">
-                  + Enter custom branch name...
-                </option>
-              </select>
-            </div>
+            <select
+              id="default-branch"
+              disabled={isLoading || isFetchingBranches}
+              value={isCustomBranch ? '__custom__' : branch}
+              onChange={(event) => {
+                const value = event.target.value;
 
-            {/* If custom branch selected */}
+                if (value === '__custom__') {
+                  setIsCustomBranch(true);
+                } else {
+                  setIsCustomBranch(false);
+                  setBranch(value);
+                }
+
+                if (errors.branch) {
+                  setErrors((previous) => ({
+                    ...previous,
+                    branch: undefined,
+                  }));
+                }
+              }}
+              aria-invalid={Boolean(errors.branch)}
+              className={`w-full rounded-lg border bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#0B6B63] focus:ring-2 focus:ring-[#0B6B63]/15 disabled:opacity-60 ${
+                errors.branch ? 'border-[#CC1F2E]' : 'border-[#9ED4C8]'
+              }`}
+            >
+              {branches.map((item) => (
+                <option key={item} value={item}>
+                  {item} {item === 'main' || item === 'master' ? '(default)' : ''}
+                </option>
+              ))}
+              <option value="__custom__">+ Enter custom branch name...</option>
+            </select>
+
             {isCustomBranch && (
-              <div className="mt-2.5">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Type custom branch name (e.g. staging or release/v1.0)"
-                  value={customBranchInput}
-                  onChange={(e) => {
-                    setCustomBranchInput(e.target.value);
-                    if (errors.branch) setErrors((prev) => ({ ...prev, branch: undefined }));
-                  }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-indigo-300 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
+              <input
+                type="text"
+                autoFocus
+                disabled={isLoading}
+                placeholder="e.g. staging or release/v1.0"
+                value={customBranchInput}
+                onChange={(event) => {
+                  setCustomBranchInput(event.target.value);
+
+                  if (errors.branch) {
+                    setErrors((previous) => ({
+                      ...previous,
+                      branch: undefined,
+                    }));
+                  }
+                }}
+                className="mt-3 w-full rounded-lg border border-[#9ED4C8] bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0B6B63] focus:ring-2 focus:ring-[#0B6B63]/15"
+              />
             )}
 
             {errors.branch ? (
-              <p className="text-xs text-rose-600 mt-1.5 font-medium flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" />
+              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[#CC1F2E]">
+                <AlertCircle className="h-3.5 w-3.5" />
                 {errors.branch}
               </p>
             ) : (
-              <p className="text-xs text-slate-400 mt-1.5">
-                Target production branch analyzed for merge health, PR velocity, and security vulnerabilities.
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Target branch analyzed for merge health, pull request velocity,
+                and repository health indicators.
               </p>
             )}
           </div>
 
-          {/* Actions */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="flex flex-col-reverse gap-3 border-t border-[#9ED4C8] pt-5 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={() => onNavigate('create-project')}
-              className="px-5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              disabled={isLoading}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#9ED4C8] px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2 disabled:opacity-60"
             >
               Back
             </button>
@@ -373,31 +449,28 @@ export const ConnectRepository: React.FC<ConnectRepositoryProps> = ({
             <button
               type="submit"
               disabled={isLoading || success}
-              className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold shadow-md shadow-indigo-600/25 transition-all hover:opacity-95 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{
-                background: 'linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%), linear-gradient(90deg, rgb(99, 102, 241) 0%, rgb(168, 85, 247) 100%)',
-              }}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-6 text-sm font-semibold text-white hover:bg-[#084F49] focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Connecting & Verifying...</span>
+                  <Loader2 className="h-4 w-4" />
+                  Connecting & Verifying...
                 </>
               ) : success ? (
                 <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Connected! Redirecting...</span>
+                  <ShieldCheck className="h-4 w-4" />
+                  Connected! Redirecting...
                 </>
               ) : (
                 <>
-                  <span>Connect Repository</span>
-                  <ExternalLink className="w-4 h-4" />
+                  Connect Repository
+                  <ExternalLink className="h-4 w-4" />
                 </>
               )}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };

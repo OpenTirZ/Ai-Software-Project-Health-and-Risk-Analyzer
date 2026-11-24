@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import type { PageView, UserProfileData } from '../types';
@@ -29,30 +29,50 @@ export const Layout: React.FC<LayoutProps> = ({
   isSyncing = false,
   children,
 }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleNavigate = (view: PageView) => {
+    setIsMenuOpen(false);
+    onNavigate(view);
+  };
+
   return (
-    <div className="flex h-screen w-full bg-[#f8fafc] text-slate-800 overflow-hidden font-['Inter',sans-serif]">
-      {/* Sidebar */}
+    <div className="flex h-screen min-h-screen w-full overflow-hidden app-canvas text-[var(--color-text-primary)] font-sans">
+
+      {isMenuOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setIsMenuOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+        />
+      )}
+
       <Sidebar
         currentView={currentView}
         currentUser={currentUser}
-        onNavigate={onNavigate}
+        onNavigate={handleNavigate}
         onLogout={onLogout}
+        isOpen={isMenuOpen}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+
         <TopBar
           currentView={currentView}
           projects={projects}
           activeProject={activeProject}
           currentUser={currentUser}
           onSelectProject={onSelectProject}
-          onNavigate={onNavigate}
+          onNavigate={handleNavigate}
           onSyncAll={onSyncAll}
           isSyncing={isSyncing}
+          onOpenMenu={() => setIsMenuOpen(true)}
         />
 
-        <main className="flex-1 overflow-y-auto bg-[#f8fafc]">
+        <main
+          className="app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        >
           {children}
         </main>
       </div>

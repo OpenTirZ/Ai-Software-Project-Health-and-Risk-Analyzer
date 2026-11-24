@@ -116,3 +116,27 @@ docker compose run --rm backend pytest Backend/tests/test_project_management.py 
 | **Restart Stack** | `docker compose restart` |
 | **Stop & Remove Volumes** | `docker compose down -v` |
 | **Open Container Shell** | `docker compose exec backend bash` |
+
+---
+
+## 8. Cloud Production Deployment (Render & Cloud Services)
+
+The application is configured for cloud deployment on **Render** (via [`render.yaml`](render.yaml)) as well as Vercel / Railway / AWS:
+
+### Production Architecture
+- **Backend Service (Render Web Service):**
+  - **Runtime:** Python 3.12 (Multi-stage container / native python)
+  - **Start Command:** `uvicorn Backend.main:app --host 0.0.0.0 --port $PORT`
+  - **Health Check Path:** `/api/health`
+  - **Production Base URL:** `https://<backend-app-name>.onrender.com/api`
+- **Frontend SPA (Render Static Site / Vercel):**
+  - **Build Command:** `npm install && npm run build`
+  - **Publish Directory:** `Frontend/dist` (or `dist` with Root Directory set to `Frontend`)
+  - **Routing Rewrite:** `/* -> /index.html` (Status: 200)
+  - **Production URL:** `https://<frontend-app-name>.onrender.com` (or `.vercel.app`)
+
+### Environment & CORS Linking
+- In the Backend Web Service:
+  - `CORS_ALLOWED_ORIGINS=https://<frontend-app-name>.onrender.com`
+- In the Frontend Static Site / Vercel:
+  - `VITE_API_BASE_URL=https://<backend-app-name>.onrender.com/api`
