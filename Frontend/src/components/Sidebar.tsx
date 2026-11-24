@@ -3,6 +3,7 @@ import type { PageView, UserProfileData } from '../types';
 import {
   FolderGit2,
   LayoutDashboard,
+  Gauge,
   HeartPulse,
   ShieldAlert,
   Users,
@@ -10,6 +11,9 @@ import {
   FileText,
   LogOut,
   Settings2,
+  MessageSquareWarning,
+  Settings,
+  ScrollText,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -38,11 +42,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Active project',
       items: [
         { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
+        { id: 'dashboard', label: 'Dashboard', icon: Gauge },
         { id: 'health-analysis', label: 'Health Analysis', icon: HeartPulse },
         { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
         { id: 'contributors', label: 'Team and Contributors', icon: Users },
         { id: 'activity', label: 'Activity', icon: ActivityIcon },
         { id: 'reports', label: 'Reports', icon: FileText },
+        { id: 'appeals', label: 'Appeals', icon: MessageSquareWarning },
+        { id: 'project-settings', label: 'Project Settings', icon: Settings },
       ],
     },
   ] as const;
@@ -149,6 +156,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Settings2 className="h-[17px] w-[17px] shrink-0" />
               <span className="truncate">Admin Panel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('audit-logs' as PageView)}
+              aria-current={currentView === ('audit-logs' as PageView) ? 'page' : undefined}
+              className={navItemClass(currentView === ('audit-logs' as PageView))}
+            >
+              <ScrollText className="h-[17px] w-[17px] shrink-0" />
+              <span className="truncate">Audit Logs</span>
             </button>
           </div>
         )}

@@ -5,13 +5,17 @@ export type PageView =
   | 'create-project'
   | 'connect-repo'
   | 'overview'
+  | 'dashboard'
   | 'health-analysis'
   | 'risk-analysis'
   | 'contributors'
   | 'activity'
   | 'reports'
   | 'profile'
-  | 'admin';
+  | 'admin'
+  | 'appeals'
+  | 'project-settings'
+  | 'audit-logs';
 
 export interface UserProfileData {
   id?: string;

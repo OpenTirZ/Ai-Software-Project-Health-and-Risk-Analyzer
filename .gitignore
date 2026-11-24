@@ -77,3 +77,5 @@ ehthumbs.db
 # Docker local overrides (keep docker-compose.yml tracked)
 # ============================================================
 docker-compose.override.yml
+
+.early.coverage
