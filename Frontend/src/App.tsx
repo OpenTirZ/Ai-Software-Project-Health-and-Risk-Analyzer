@@ -16,6 +16,12 @@ import { Contributors } from './pages/Contributors';
 import { Activity } from './pages/Activity';
 import { Reports } from './pages/Reports';
 import { UserProfile } from './pages/UserProfile';
+// @ts-ignore
+import Appeals from './pages/Appeals.jsx';
+// @ts-ignore
+import ProjectSettings from './pages/ProjectSettings.jsx';
+// @ts-ignore
+import AuditLogs from './pages/AuditLogs.jsx';
 
 // Known demo/seed user emails that come pre-loaded with demo repository data
 const SEED_USER_EMAILS = ['john.dev@aegis-health.io', 'demo@aegis.io'];
@@ -271,6 +277,32 @@ export function App() {
         <Reports
           projectId={activeProjectId}
           selectedRepo={selectedRepo}
+          onNavigate={setCurrentView}
+        />
+      )}
+
+      {currentView === 'appeals' && (
+        <Appeals
+          selectedRepo={selectedRepo}
+          currentUser={currentUser}
+          onNavigate={setCurrentView}
+        />
+      )}
+
+      {currentView === 'settings' && (
+        <ProjectSettings
+          projectId={activeProjectId}
+          selectedRepo={selectedRepo}
+          onNavigate={setCurrentView}
+          onRepoDeleted={() => {
+            setSelectedRepo('');
+            setCurrentView('projects');
+          }}
+        />
+      )}
+
+      {currentView === 'audit-logs' && (
+        <AuditLogs
           onNavigate={setCurrentView}
         />
       )}

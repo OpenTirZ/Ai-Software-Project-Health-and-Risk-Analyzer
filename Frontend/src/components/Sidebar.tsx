@@ -8,7 +8,10 @@ import {
   Activity as ActivityIcon, 
   FileText, 
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  Scale,
+  Settings,
+  ScrollText
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -27,6 +30,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNa
     { id: 'contributors', label: 'Team and Contributors', icon: Users },
     { id: 'activity', label: 'Activity', icon: ActivityIcon },
     { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'appeals', label: 'Developer Appeals', icon: Scale },
+    { id: 'audit-logs', label: 'Admin Audit Trail', icon: ScrollText },
+    { id: 'settings', label: 'Project Settings', icon: Settings },
   ] as const;
 
   const initials = currentUser?.fullName
