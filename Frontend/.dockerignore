@@ -1,9 +1,7 @@
 node_modules
 dist
-.env
-.env.local
 .git
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
+.github
+.early.coverage
+*.log
+.env.local

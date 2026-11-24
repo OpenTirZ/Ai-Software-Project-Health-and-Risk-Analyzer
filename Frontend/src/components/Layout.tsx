@@ -1,78 +1,51 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
-import type { PageView, UserProfileData } from '../types';
-import type { ProjectResponse } from '../services/api';
+import type { PageView, Repository, UserProfileData } from '../types';
 
 interface LayoutProps {
   currentView: PageView;
-  projects?: ProjectResponse[];
-  activeProject?: ProjectResponse | null;
+  selectedRepo: string;
+  repositories?: Repository[];
   currentUser?: UserProfileData;
-  onSelectProject?: (projectId: string) => void;
+  onSelectRepo: (repo: string) => void;
   onNavigate: (view: PageView) => void;
   onLogout: () => void;
-  onSyncAll?: () => void;
-  isSyncing?: boolean;
   children: React.ReactNode;
 }
 
 export const Layout: React.FC<LayoutProps> = ({
   currentView,
-  projects = [],
-  activeProject,
+  selectedRepo,
+  repositories = [],
   currentUser,
-  onSelectProject,
+  onSelectRepo,
   onNavigate,
   onLogout,
-  onSyncAll,
-  isSyncing = false,
   children,
 }) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const handleNavigate = (view: PageView) => {
-    setIsMenuOpen(false);
-    onNavigate(view);
-  };
-
   return (
-    <div className="flex h-screen min-h-screen w-full overflow-hidden app-canvas text-[var(--color-text-primary)] font-sans">
-
-      {isMenuOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation menu"
-          onClick={() => setIsMenuOpen(false)}
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-        />
-      )}
-
-      <Sidebar
-        currentView={currentView}
+    <div className="flex h-screen w-full bg-[#f8fafc] text-slate-800 overflow-hidden font-['Inter',sans-serif]">
+      {/* Sidebar */}
+      <Sidebar 
+        currentView={currentView} 
         currentUser={currentUser}
-        onNavigate={handleNavigate}
-        onLogout={onLogout}
-        isOpen={isMenuOpen}
+        onNavigate={onNavigate} 
+        onLogout={onLogout} 
       />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-
-        <TopBar
-          currentView={currentView}
-          projects={projects}
-          activeProject={activeProject}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <TopBar 
+          currentView={currentView} 
+          selectedRepo={selectedRepo} 
+          repositories={repositories}
           currentUser={currentUser}
-          onSelectProject={onSelectProject}
-          onNavigate={handleNavigate}
-          onSyncAll={onSyncAll}
-          isSyncing={isSyncing}
-          onOpenMenu={() => setIsMenuOpen(true)}
+          onSelectRepo={onSelectRepo} 
+          onNavigate={onNavigate} 
         />
-
-        <main
-          className="app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
-        >
+        
+        <main className="flex-1 overflow-y-auto bg-[#f8fafc]">
           {children}
         </main>
       </div>

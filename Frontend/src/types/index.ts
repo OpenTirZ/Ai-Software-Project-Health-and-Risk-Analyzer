@@ -5,13 +5,12 @@ export type PageView =
   | 'create-project'
   | 'connect-repo'
   | 'overview'
-  | 'health-analysis'
+  | 'dashboard'
   | 'risk-analysis'
   | 'contributors'
   | 'activity'
   | 'reports'
-  | 'profile'
-  | 'admin';
+  | 'profile';
 
 export interface UserProfileData {
   id?: string;
@@ -29,9 +28,9 @@ export interface Repository {
   id: string;
   name: string;
   branch: string;
-  healthScore?: number;
-  riskClassification?: 'LOW RISK' | 'ELEVATED CHURN' | 'HIGH RISK' | 'MODERATE CHURN';
-  lastAudit?: string;
+  healthScore: number;
+  riskClassification: 'LOW RISK' | 'ELEVATED CHURN' | 'HIGH RISK' | 'MODERATE CHURN';
+  lastAudit: string;
   description?: string;
   monitored?: boolean;
 }

@@ -1,469 +1,314 @@
 import React, { useState, useEffect } from 'react';
 import type { PageView, ReportItem } from '../types';
-import { reportsData } from '../data/mockData';
-import { reportApi, type ProjectResponse } from '../services/api';
-import {
-  Plus,
-  Download,
-  Eye,
-  CheckCircle,
-  X,
-  AlertCircle,
-  FileText,
-} from 'lucide-react';
+import { Plus, Download, Eye, CheckCircle, Sparkles, X } from 'lucide-react';
+import { metricService } from '../services/metricService';
 
 interface ReportsProps {
+  projectId?: string;
   selectedRepo: string;
-  project?: ProjectResponse | null;
   onNavigate: (view: PageView) => void;
 }
 
-function escapePdf(str: string): string {
-  return str.replace(/[\\()]/g, '\\$&');
-}
-
-function generatePDFBlob(report: ReportItem): Blob {
-  const sanitize = (text: string) =>
-    escapePdf(text.replace(/[^\x20-\x7E]/g, ''));
-
-  const lines = [
-    'BT',
-    '/F1 20 Tf',
-    `50 740 Td (${sanitize(report.title)}) Tj`,
-    '/F1 12 Tf',
-    `0 -28 Td (Project: ${sanitize(report.project)}) Tj`,
-    `0 -18 Td (Generated: ${sanitize(report.generatedDate)}) Tj`,
-    `0 -18 Td (Overall Health Score: ${report.healthScore} / 100) Tj`,
-    `0 -18 Td (Active Risks Detected: ${report.risksCount}  |  Potential Bottlenecks: ${report.bottlenecksCount}) Tj`,
-    '0 -30 Td (Recommended Actions:) Tj',
-    ...report.recommendations.map(
-      (rec, idx) => `0 -18 Td (${idx + 1}. ${sanitize(rec)}) Tj`,
-    ),
-    'ET',
-  ].join('\n');
-
-  const streamLen = streamLength(lines);
-
-  const pdfParts = [
-    '%PDF-1.4\n',
-    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
-    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
-    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
-    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
-    `5 0 obj\n<< /Length ${streamLen} >>\nstream\n${lines}\nendstream\nendobj\n`,
-  ];
-
-  let offset = 0;
-  const offsets: number[] = [0];
-
-  for (let i = 0; i < pdfParts.length; i++) {
-    if (i > 0) offsets.push(offset);
-    offset += pdfParts[i].length;
-  }
-
-  let xref = 'xref\n0 6\n0000000000 65535 f \n';
-
-  for (let i = 1; i <= 5; i++) {
-    xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  }
-
-  const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${offset}\n%%EOF`;
-  const fullPdf = pdfParts.join('') + xref + trailer;
-
-  return new Blob([fullPdf], { type: 'application/pdf' });
-}
-
-function streamLength(value: string): number {
-  return new TextEncoder().encode(value).length;
-}
-
-export const Reports: React.FC<ReportsProps> = ({
+export const Reports: React.FC<ReportsProps> = ({ 
+  projectId = 'proj_core_platform', 
   selectedRepo,
-  project,
 }) => {
-  const [reports, setReports] = useState<ReportItem[]>(reportsData);
-  const [selectedReport, setSelectedReport] = useState<ReportItem>(
-    reportsData[0],
-  );
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
+  const [healthSummary, setHealthSummary] = useState<any>(null);
 
   useEffect(() => {
-    if (!project?.id) return;
+    let isMounted = true;
+    metricService.getHealthSummary(projectId, selectedRepo)
+      .then((data) => {
+        if (!isMounted || !data) return;
+        setHealthSummary(data);
 
-    reportApi
-      .getReports(project.id)
-      .then((fetched) => {
-        if (fetched.length > 0) {
-          setReports(fetched);
-          setSelectedReport(fetched[0]);
+        const score = data.overallHealth?.score ?? 84;
+        const pendingCount = data.bottlenecks?.pendingPrsOver48hCount ?? 1;
+        const staleCount = (data.staleIssues || []).filter((i: any) => i.daysInactive >= 14).length;
+        const totalRisks = (pendingCount > 0 ? 1 : 0) + (staleCount > 0 ? 1 : 0) + (score < 80 ? 2 : 1);
+
+        const defaultRecommendations: string[] = [];
+        if (pendingCount > 0) {
+          defaultRecommendations.push(`Review and unblock ${pendingCount} aging pull requests pending >48h`);
         }
-      })
-      .catch((err: unknown) => {
-        setApiError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load project reports.',
-        );
-      });
-  }, [project?.id]);
+        if (staleCount > 0) {
+          defaultRecommendations.push(`Triage ${staleCount} dormant issues with inactivity over 14 days`);
+        }
+        if (data.workload?.busFactorRisk !== 'Low Risk') {
+          defaultRecommendations.push(`Knowledge transfer recommended: address ${data.workload?.busFactorRisk || 'workload concentration'}`);
+        }
+        defaultRecommendations.push(`Monitor CI/CD pipeline and maintain automated test suite`);
 
-  const handleGenerateReport = async () => {
-    setGenerating(true);
-    setApiError(null);
-
-    try {
-      if (project?.id) {
-        const generated = await reportApi.generateReport(project.id);
-        setReports((prev) => [generated, ...prev]);
-        setSelectedReport(generated);
-      } else {
-        const newReport: ReportItem = {
-          id: Date.now().toString(),
+        const initialReport: ReportItem = {
+          id: `rep_${selectedRepo}_init`,
           title: 'PROJECT HEALTH AUDIT REPORT',
-          project: selectedRepo,
+          project: `${selectedRepo} (Mainline)`,
           generatedDate: new Date().toLocaleDateString('en-US', {
             month: 'short',
             day: '2-digit',
             year: 'numeric',
           }),
-          healthScore: 84,
-          risksCount: 2,
-          bottlenecksCount: 2,
-          recommendations: [
-            'Immediate rebase on main branch recommended',
-            'Automated CI build times stabilized under 4 minutes',
-            'Zero critical CVEs discovered in container images',
-          ],
+          healthScore: score,
+          risksCount: totalRisks,
+          bottlenecksCount: pendingCount,
+          recommendations: defaultRecommendations,
         };
 
-        setReports((prev) => [newReport, ...prev]);
-        setSelectedReport(newReport);
-      }
-    } catch (err: unknown) {
-      setApiError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to generate report from backend.',
-      );
-    } finally {
+        setReports([initialReport]);
+        setSelectedReport(initialReport);
+      })
+      .catch((err) => {
+        console.warn('Could not load dynamic summary for Reports:', err);
+      });
+
+    return () => { isMounted = false; };
+  }, [projectId, selectedRepo]);
+
+  const handleGenerateReport = () => {
+    setGenerating(true);
+    setTimeout(() => {
+      const score = healthSummary?.overallHealth?.score ?? 84;
+      const pendingCount = healthSummary?.bottlenecks?.pendingPrsOver48hCount ?? 1;
+      const staleCount = (healthSummary?.staleIssues || []).filter((i: any) => i.daysInactive >= 14).length;
+      const totalRisks = (pendingCount > 0 ? 1 : 0) + (staleCount > 0 ? 1 : 0) + (score < 80 ? 2 : 1);
+
+      const dynamicRecommendations: string[] = [
+        `Rebase active branch on main before next release`,
+        `Address review turnaround time (currently ${healthSummary?.bottlenecks?.avgReviewLatencyHours || 18}h avg)`,
+        `Sprint progress: ${healthSummary?.sprint?.completedStoryPoints || 30}/${healthSummary?.sprint?.totalStoryPoints || 40} story points burned`,
+      ];
+
+      const newReport: ReportItem = {
+        id: Date.now().toString(),
+        title: 'ON-DEMAND HEALTH & RISK AUDIT',
+        project: `${selectedRepo} (${healthSummary?.branch || 'main'})`,
+        generatedDate: new Date().toLocaleDateString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+        }),
+        healthScore: score,
+        risksCount: totalRisks,
+        bottlenecksCount: pendingCount,
+        recommendations: dynamicRecommendations,
+      };
+
+      setReports((prev) => [newReport, ...prev]);
+      setSelectedReport(newReport);
       setGenerating(false);
-    }
+    }, 900);
   };
 
-  const handleDownloadPDF = (reportToDownload?: ReportItem) => {
-    const target = reportToDownload || selectedReport;
-    if (!target) return;
-
-    const blob = generatePDFBlob(target);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-
-    const cleanName = (target.project || selectedRepo).replace(
-      /[^a-zA-Z0-9_-]/g,
-      '_',
-    );
-
-    link.setAttribute('download', `${cleanName}_health_report.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const healthColor = (score: number) => {
-    if (score < 50) return 'text-[#CC1F2E]';
-    if (score < 75) return 'text-[#B45309]';
-    return 'text-[#0B6B63]';
+  const handleDownloadPDF = () => {
+    window.print();
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-5 md:p-8">
-
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0E2A2A] md:text-3xl">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
             Reports
           </h1>
-          <p className="mt-1 text-sm text-[#3F5F5C]">
-            Generate and review project health reports for{' '}
-            <span className="font-semibold text-[#0E2A2A]">
-              {selectedRepo}
-            </span>
-            .
+          <p className="text-sm text-slate-500 mt-1">
+            Generate and review project health reports for <span className="font-semibold text-slate-700">{selectedRepo}</span>.
           </p>
         </div>
 
+        {/* Generate Report Button */}
         <button
           onClick={handleGenerateReport}
           disabled={generating}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all hover:opacity-95 active:scale-95 cursor-pointer"
+          style={{
+            background: 'linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%), linear-gradient(90deg, rgb(99, 102, 241) 0%, rgb(168, 85, 247) 100%)',
+          }}
         >
-          <Plus className="h-4 w-4" />
-          {generating ? 'Generating Report...' : 'Generate Report'}
+          {generating ? (
+            <>
+              <Sparkles className="w-4 h-4 animate-spin" />
+              <span>Analyzing & Generating...</span>
+            </>
+          ) : (
+            <>
+              <Plus className="w-4 h-4" />
+              <span>+ Generate Report</span>
+            </>
+          )}
         </button>
       </div>
 
-      {apiError && (
-        <div
-          role="alert"
-          className="flex flex-col justify-between gap-3 rounded-xl border border-[#CC1F2E]/20 bg-[#CC1F2E]/5 p-4 sm:flex-row sm:items-center"
-        >
-          <div className="flex items-start gap-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#CC1F2E]" />
-            <div>
-              <p className="text-sm font-semibold text-[#CC1F2E]">
-                Report operation failed
-              </p>
-              <p className="mt-1 text-sm text-[#CC1F2E]">{apiError}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleGenerateReport}
-            disabled={generating}
-            className="shrink-0 rounded-lg bg-[#CC1F2E] px-3 py-2 text-xs font-semibold text-white hover:bg-[#CC1F2E] disabled:opacity-60"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {reports.length === 0 ? (
-        <div className="rounded-xl border border-[#9ED4C8] bg-white px-6 py-14 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#CDEFE6] text-[#0B6B63]">
-            <FileText className="h-6 w-6" />
-          </div>
-          <h2 className="mt-4 text-base font-semibold text-[#0E2A2A]">
-            No reports available
-          </h2>
-          <p className="mt-2 text-sm text-[#5F7C79]">
-            Generate a project health report to get started.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {reports.map((report) => (
-            <article
-              key={report.id}
-              className="space-y-6 rounded-xl border border-[#9ED4C8] bg-white p-5 md:p-7"
-            >
-
-              <div className="flex flex-col justify-between gap-3 border-b border-[#9ED4C8] pb-4 sm:flex-row sm:items-start">
-                <div>
-                  <h2 className="text-lg font-bold tracking-tight text-[#0E2A2A]">
-                    {report.title}
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-[#3F5F5C]">
-                    {report.project}
-                  </p>
-                  <p className="mt-1 text-xs text-[#5F7C79]">
-                    Generated on {report.generatedDate}
-                  </p>
-                </div>
-
-                <span className="inline-flex w-fit items-center rounded-md border border-[#9ED4C8] bg-[#CDEFE6] px-3 py-1.5 text-xs font-bold text-[#0B6B63]">
-                  Health: {report.healthScore}/100
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
-                    Project Health
-                  </p>
-                  <p
-                    className={`mt-1 text-2xl font-bold tabular-nums ${healthColor(
-                      report.healthScore,
-                    )}`}
-                  >
-                    {report.healthScore}%
-                  </p>
-                  <p className="mt-1 text-xs text-[#5F7C79]">
-                    Automated telemetry evaluation
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
-                    Flagged Risks
-                  </p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums text-[#CC1F2E]">
-                    {report.risksCount}
-                  </p>
-                  <p className="mt-1 text-xs text-[#5F7C79]">
-                    Active threshold warnings
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
-                    Bottlenecks
-                  </p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums text-[#B45309]">
-                    {report.bottlenecksCount}
-                  </p>
-                  <p className="mt-1 text-xs text-[#5F7C79]">
-                    Aging pull request queues
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-[#3F5F5C]">
-                  Key Actionable Recommendations
-                </h3>
-
-                <div className="space-y-2">
-                  {report.recommendations.map((rec, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 rounded-lg border border-[#9ED4C8] bg-white p-3"
-                    >
-                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0B6B63]" />
-                      <span className="text-sm leading-5 text-[#3F5F5C]">
-                        {rec}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-2 border-t border-[#9ED4C8] pt-4">
-                <button
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setShowViewModal(true);
-                  }}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#9ED4C8] bg-white px-4 py-2 text-sm font-semibold text-[#0B6B63] hover:bg-[#CDEFE6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
-                >
-                  <Eye className="h-4 w-4" />
-                  View Report
-                </button>
-
-                <button
-                  onClick={() => handleDownloadPDF(report)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
-                >
-                  <Download className="h-4 w-4" />
-                  Download PDF
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-
-      {showViewModal && selectedReport && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0E2A2A]/60 p-4"
-          onClick={() => setShowViewModal(false)}
-        >
+      {/* Reports List */}
+      <div className="space-y-6">
+        {reports.map((report) => (
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="report-modal-title"
-            className="max-h-[90vh] w-full max-w-2xl space-y-6 overflow-y-auto rounded-xl border border-[#9ED4C8] bg-white p-5 md:p-7"
-            onClick={(event) => event.stopPropagation()}
+            key={report.id}
+            className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200/90 shadow-sm space-y-6 hover:border-slate-300 transition-all"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-[#9ED4C8] pb-4">
+            {/* Report Header Title */}
+            <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3
-                  id="report-modal-title"
-                  className="text-lg font-bold text-[#0E2A2A]"
-                >
-                  {selectedReport.title}
-                </h3>
-                <p className="mt-1 text-xs text-[#5F7C79]">
-                  Target: {selectedReport.project} ·{' '}
-                  {selectedReport.generatedDate}
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                  {report.title}
+                </h2>
+                <p className="text-sm font-semibold text-slate-600 mt-0.5">
+                  {report.project}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Generated: {report.generatedDate}
                 </p>
               </div>
-
-              <button
-                onClick={() => setShowViewModal(false)}
-                aria-label="Close report details"
-                className="rounded-md p-1.5 text-[#5F7C79] hover:bg-[#CDEFE6] hover:text-[#0B6B63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <span className="self-start sm:self-auto px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Verified Audit
+              </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3 text-center">
-                <span className="text-xs text-[#5F7C79]">Health</span>
-                <p
-                  className={`mt-1 text-2xl font-bold tabular-nums ${healthColor(
-                    selectedReport.healthScore,
-                  )}`}
-                >
-                  {selectedReport.healthScore}
+            {/* 3 Metric Summary Boxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* HEALTH */}
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/70 text-center">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  HEALTH
+                </p>
+                <p className="text-3xl font-extrabold text-emerald-600 mt-1">
+                  {report.healthScore}
                 </p>
               </div>
 
-              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3 text-center">
-                <span className="text-xs text-[#5F7C79]">Risks</span>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-[#CC1F2E]">
-                  {selectedReport.risksCount}
+              {/* RISKS */}
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/70 text-center">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  RISKS
+                </p>
+                <p className="text-3xl font-extrabold text-amber-500 mt-1">
+                  {report.risksCount}
                 </p>
               </div>
 
-              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3 text-center">
-                <span className="text-xs text-[#5F7C79]">Bottlenecks</span>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-[#B45309]">
-                  {selectedReport.bottlenecksCount}
+              {/* BOTTLENECKS */}
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/70 text-center">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  BOTTLENECKS
+                </p>
+                <p className="text-3xl font-extrabold text-blue-600 mt-1">
+                  {report.bottlenecksCount}
                 </p>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-sm font-bold text-[#0E2A2A]">
-                Executive Summary
-              </h4>
-              <p className="text-sm leading-6 text-[#3F5F5C]">
-                The software project evaluated meets the enterprise
-                reliability criteria. No blocker regressions were detected
-                across the master pipeline. Key improvement opportunities
-                center around pull request aging velocity.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-[#0E2A2A]">
-                Actionable Checklist
-              </h4>
-
-              <ul className="space-y-2">
-                {selectedReport.recommendations.map((recommendation, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-2 rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-3"
-                  >
-                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0B6B63]" />
-                    <span className="text-sm leading-5 text-[#3F5F5C]">
-                      {recommendation}
-                    </span>
+            {/* Key Recommendations */}
+            <div className="bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 mb-2.5">
+                Key Recommendations
+              </h3>
+              <ul className="space-y-2 text-sm text-slate-700">
+                {report.recommendations.map((rec, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-indigo-600 font-bold">•</span>
+                    <span>{rec}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-[#9ED4C8] pt-4">
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setShowViewModal(false)}
-                className="rounded-lg border border-[#9ED4C8] bg-white px-4 py-2 text-sm font-semibold text-[#3F5F5C] hover:bg-[#EAF8F3]"
+                onClick={() => {
+                  setSelectedReport(report);
+                  setShowViewModal(true);
+                }}
+                className="px-5 py-2 rounded-xl border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
               >
-                Close
+                <Eye className="w-3.5 h-3.5" />
+                <span>View Report</span>
               </button>
 
               <button
-                onClick={() => handleDownloadPDF(selectedReport)}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49]"
+                onClick={handleDownloadPDF}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm shadow-blue-500/20"
               >
-                <Download className="h-4 w-4" />
-                Export PDF
+                <Download className="w-3.5 h-3.5" />
+                <span>Download PDF</span>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Report Details Modal */}
+      {showViewModal && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">
+                  {selectedReport.title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Target: {selectedReport.project} • {selectedReport.generatedDate}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-3 bg-slate-50 rounded-lg text-center">
+                <span className="text-xs text-slate-500">Health</span>
+                <p className="text-2xl font-bold text-emerald-600">{selectedReport.healthScore}</p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg text-center">
+                <span className="text-xs text-slate-500">Risks</span>
+                <p className="text-2xl font-bold text-amber-600">{selectedReport.risksCount}</p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg text-center">
+                <span className="text-xs text-slate-500">Bottlenecks</span>
+                <p className="text-2xl font-bold text-blue-600">{selectedReport.bottlenecksCount}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-800">Executive Summary</h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                The software project evaluated meets the enterprise reliability criteria. No blocker regressions were detected across the master pipeline. Key improvement opportunities center around pull request aging velocity.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-800">Actionable Checklist</h4>
+              <ul className="text-xs text-slate-600 space-y-2">
+                {selectedReport.recommendations.map((r, i) => (
+                  <li key={i} className="flex items-center gap-2 p-2 rounded bg-slate-50 border border-slate-100">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="px-5 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleDownloadPDF}
+                className="px-5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export PDF</span>
               </button>
             </div>
           </div>

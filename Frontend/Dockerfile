@@ -1,33 +1,29 @@
-# Stage 1: Build Vite React SPA
-FROM node:22-alpine AS build
-
+# Stage 1: Build Frontend
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy dependency manifest
-COPY package.json ./
+# Copy dependency specifications
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Install dependencies (clean install)
-RUN npm install
-
-# Copy application sources
+# Copy application source code and compile
 COPY . .
-
-# Build application bundle
-ARG VITE_API_BASE_URL=/api
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
-# Stage 2: Serve with lightweight NGINX
-FROM nginx:alpine
+# Stage 2: Production Server
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=5000
 
-# Copy built distribution from build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+# Install production dependencies only
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-# Copy custom Nginx configuration with reverse proxy
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy server and built frontend from builder stage
+COPY server ./server
+COPY --from=builder /app/dist ./dist
 
-# Expose HTTP port
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
-
+# Expose port and start
+EXPOSE 5000
+CMD ["node", "server/server.js"]

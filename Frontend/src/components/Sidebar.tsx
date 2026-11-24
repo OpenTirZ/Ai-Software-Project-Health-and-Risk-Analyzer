@@ -1,15 +1,14 @@
 import React from 'react';
 import type { PageView, UserProfileData } from '../types';
-import {
-  FolderGit2,
-  LayoutDashboard,
-  HeartPulse,
-  ShieldAlert,
-  Users,
-  Activity as ActivityIcon,
-  FileText,
+import { 
+  FolderGit2, 
+  LayoutDashboard, 
+  ShieldAlert, 
+  Users, 
+  Activity as ActivityIcon, 
+  FileText, 
   LogOut,
-  Settings2,
+  ShieldCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -17,42 +16,18 @@ interface SidebarProps {
   currentUser?: UserProfileData;
   onNavigate: (view: PageView) => void;
   onLogout: () => void;
-  isOpen?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  currentView,
-  currentUser,
-  onNavigate,
-  onLogout,
-  isOpen = false,
-}) => {
-  const isAdmin = currentUser?.role === 'admin';
-
-  const navGroups = [
-    {
-      label: 'Portfolio',
-      items: [{ id: 'projects', label: 'All Repositories', icon: FolderGit2 }],
-    },
-    {
-      label: 'Active project',
-      items: [
-        { id: 'overview', label: 'Project Overview', icon: LayoutDashboard },
-        { id: 'health-analysis', label: 'Health Analysis', icon: HeartPulse },
-        { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
-        { id: 'contributors', label: 'Team and Contributors', icon: Users },
-        { id: 'activity', label: 'Activity', icon: ActivityIcon },
-        { id: 'reports', label: 'Reports', icon: FileText },
-      ],
-    },
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, currentUser, onNavigate, onLogout }) => {
+  const navItems = [
+    { id: 'projects', label: 'All Repositories', icon: FolderGit2 },
+    { id: 'overview', label: 'Project Overview', icon: FileText },
+    { id: 'dashboard', label: 'Health Dashboard', icon: LayoutDashboard },
+    { id: 'risk-analysis', label: 'Risk and Vulnerability', icon: ShieldAlert },
+    { id: 'contributors', label: 'Team and Contributors', icon: Users },
+    { id: 'activity', label: 'Activity', icon: ActivityIcon },
+    { id: 'reports', label: 'Reports', icon: FileText },
   ] as const;
-
-  const navItemClass = (isActive: boolean) =>
-    `group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] ${
-      isActive
-        ? 'bg-gradient-to-r from-[#C8102E] to-[#8A000F] font-semibold text-white shadow-lg shadow-black/30'
-        : 'font-medium text-white/75 hover:bg-white/10 hover:text-white'
-    }`
 
   const initials = currentUser?.fullName
     ? currentUser.fullName
@@ -68,120 +43,82 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const displayRole = currentUser?.role || 'Team Member';
 
   return (
-    <aside
-      className={`fixed inset-y-0 left-0 z-40 flex min-h-screen w-[260px] shrink-0 flex-col hero-vibrant select-none text-white transition-transform duration-200 lg:static lg:translate-x-0 ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}
-    >
-
-      <button
-        type="button"
+    <aside className="w-[260px] bg-[#0c1022] text-slate-300 flex flex-col shrink-0 min-h-screen border-r border-[#1e293b]/70 select-none">
+      {/* Brand Header */}
+      <div 
         onClick={() => onNavigate('overview')}
-        aria-label="Go to project overview"
-        className="flex w-full items-center gap-3 border-b border-white/15 px-5 py-5 text-left"
+        className="px-5 py-5 border-b border-slate-800/80 cursor-pointer hover:opacity-95 transition-opacity"
       >
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 p-1 shadow-lg shadow-black/30">
-          <img 
-            src="/assets/kavach-logo.png" 
-            alt="कVaच Logo" 
-            className="w-full h-full object-contain filter drop-shadow-md"
-          />
-        </div>
-
-        <div className="min-w-0">
-          <h1 className="text-[20px] font-black leading-tight tracking-tight text-white flex items-center">
-            <span>क</span>
-            <span className="text-[#FF8A95]">Va</span>
-            <span>च</span>
-          </h1>
-          <p className="mt-1 text-[9.5px] font-medium leading-relaxed text-[#F0FDE5]/80">
-            See the Risks. Strengthen the Project.
-          </p>
-        </div>
-      </button>
-
-      <nav
-        aria-label="Main navigation"
-        className="flex-1 space-y-6 overflow-y-auto px-3 py-6"
-      >
-        {navGroups.map((group) => (
-          <div key={group.label} className="space-y-1">
-            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-white/55">
-              {group.label}
-            </p>
-
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentView === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onNavigate(item.id as PageView)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={navItemClass(isActive)}
-                >
-                  <Icon
-                    className={`h-[17px] w-[17px] shrink-0 ${
-                      isActive ? 'text-white' : 'text-white/70 group-hover:text-white'
-                    }`}
-                    strokeWidth={1.9}
-                  />
-
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <ShieldCheck className="w-5 h-5 text-white" />
           </div>
-        ))}
-
-        {isAdmin && (
-          <div className="space-y-1">
-            <p className="mb-2 px-3 text-[11px] font-semibold tracking-wide text-white/55">
-              Administration
+          <div>
+            <h1 className="text-[17px] font-bold text-white tracking-tight leading-tight">
+              Aegis AI
+            </h1>
+            <p className="text-[10px] text-slate-400 font-medium tracking-tight">
+              AI Software Project Health & Risk Analyzer
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Menu */}
+      <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentView === item.id;
+          
+          return (
             <button
-              type="button"
-              onClick={() => onNavigate('admin')}
-              aria-current={currentView === 'admin' ? 'page' : undefined}
-              className={navItemClass(currentView === 'admin')}
+              key={item.id}
+              onClick={() => onNavigate(item.id as PageView)}
+              className={`w-full text-left px-3.5 py-2.5 rounded-[10px] text-[14px] font-medium transition-all duration-200 flex items-center gap-3 ${
+                isActive
+                  ? 'text-white shadow-md shadow-indigo-600/30 relative overflow-hidden font-semibold'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+              style={
+                isActive
+                  ? {
+                      background: 'linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%), linear-gradient(90deg, rgb(99, 102, 241) 0%, rgb(168, 85, 247) 100%)',
+                    }
+                  : undefined
+              }
             >
-              <Settings2 className="h-[17px] w-[17px] shrink-0" />
-              <span className="truncate">Admin Panel</span>
+              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              <span className="truncate">{item.label}</span>
             </button>
-          </div>
-        )}
+          );
+        })}
       </nav>
 
-      <div className="border-t border-white/15 p-3">
-
+      {/* User Footer Profile */}
+      <div className="p-3 border-t border-slate-800/80 bg-[#090d1c]">
         <button
-          type="button"
           onClick={() => onNavigate('profile')}
-          className="flex w-full items-center gap-3 rounded-xl border border-white/15 bg-white/10 p-3 text-left hover:bg-white/15"
+          className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 transition-colors text-left cursor-pointer"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E5344A] to-[#990011] text-xs font-bold text-white">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
             {initials}
           </div>
-
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-semibold text-white">
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-semibold text-slate-100 truncate">
               {displayName}
             </p>
-
-            <p className="mt-0.5 truncate text-[11px] text-white/65">
-              {currentUser?.username || displayRole}
+            <p className="text-[11px] text-slate-400 truncate">
+              {currentUser?.username ? `${currentUser.username}` : displayRole}
             </p>
           </div>
         </button>
 
+        {/* Logout */}
         <button
-          type="button"
           onClick={onLogout}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white"
+          className="mt-2.5 w-full flex items-center justify-center gap-2 py-1.5 text-xs font-medium text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="w-3.5 h-3.5" />
           <span>Logout</span>
         </button>
       </div>

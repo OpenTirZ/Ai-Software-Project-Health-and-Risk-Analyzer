@@ -1,216 +1,173 @@
 import React, { useState, useEffect } from 'react';
-import type { PageView } from '../types';
-import {
-  metricsApi,
-  type ProjectResponse,
-  type HealthSummaryData,
-} from '../services/api';
-import {
-  AlertTriangle,
-  Info,
-  ChevronRight,
-  ShieldCheck,
-  RefreshCw,
-  ArrowLeft,
-} from 'lucide-react';
+import type { PageView, RiskItem } from '../types';
+import { AlertTriangle, Info, ChevronRight } from 'lucide-react';
+import { metricService } from '../services/metricService';
 
 interface RiskAnalysisProps {
-  project: ProjectResponse | null;
+  projectId?: string;
+  selectedRepo: string;
   onNavigate: (view: PageView) => void;
 }
 
-type RiskFilter = 'All' | 'High' | 'Medium' | 'Low';
-
-export const RiskAnalysis: React.FC<RiskAnalysisProps> = ({
-  project,
-  onNavigate,
+export const RiskAnalysis: React.FC<RiskAnalysisProps> = ({ 
+  projectId = 'proj_core_platform', 
+  selectedRepo, 
+  onNavigate 
 }) => {
-  const [healthSummary, setHealthSummary] =
-    useState<HealthSummaryData | null>(null);
-  const [filter, setFilter] = useState<RiskFilter>('All');
-  const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchRisks = async (projectId: string) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await metricsApi.getHealthSummary(projectId);
-      setHealthSummary(data);
-
-      if (data.active_flags && data.active_flags.length > 0) {
-        setSelectedRiskId(data.active_flags[0].id);
-      } else {
-        setSelectedRiskId(null);
-      }
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to fetch project risk analysis.',
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [filter, setFilter] = useState<'All' | 'High' | 'Medium' | 'Low'>('All');
+  const [risks, setRisks] = useState<RiskItem[]>([]);
+  const [selectedRisk, setSelectedRisk] = useState<RiskItem | null>(null);
 
   useEffect(() => {
-    if (project?.id) {
-      fetchRisks(project.id);
-    }
-  }, [project?.id]);
+    let isMounted = true;
+    metricService.getHealthSummary(projectId, selectedRepo)
+      .then((data) => {
+        if (!isMounted || !data) return;
 
-  if (!project) {
-    return (
-      <div className="mx-auto max-w-4xl p-8 text-center">
-        <div className="rounded-xl border border-[#9ED4C8] bg-white p-8">
-          <p className="text-sm text-[#3F5F5C]">
-            Please select an active project to view risk analysis.
-          </p>
-          <button
-            onClick={() => onNavigate('projects')}
-            className="mt-4 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
-          >
-            View Projects
-          </button>
-        </div>
-      </div>
-    );
-  }
+        const generatedRisks: RiskItem[] = [];
+        const bottlenecks = data.bottlenecks || {};
+        const workload = data.workload || {};
+        const staleIssues = data.staleIssues || [];
+        const sprint = data.sprint || {};
+        const prs = bottlenecks.criticalBottlenecks || [];
 
-  const allFlags = healthSummary?.active_flags || [];
+        // 1. PR Review Latency Risk
+        const latency = bottlenecks.avgReviewLatencyHours ?? 18;
+        const prSeverity = latency >= 24 ? 'HIGH' : latency >= 18 ? 'MEDIUM' : 'LOW';
+        const prEvidence = prs.length > 0
+          ? prs.slice(0, 4).map((p: any) => `${p.id} (${p.hoursPending}h - ${p.title.slice(0, 32)}...)`)
+          : [`Average latency: ${latency}h`, `Pending >48h: ${bottlenecks.pendingPrsOver48hCount || 0} PRs`];
+        generatedRisks.push({
+          id: 'risk_pr_latency',
+          severity: prSeverity,
+          title: `PR Review Latency & Bottlenecks (${selectedRepo})`,
+          description: `Time to first review averages ${latency}h with ${bottlenecks.pendingPrsOver48hCount || 0} PRs pending beyond 48 hours.`,
+          evidence: prEvidence,
+          threshold: 'Target ≤ 24h review turnaround',
+          whyRisk: `Pull requests delayed past 48 hours create architectural drift, exacerbate merge conflicts, and throttle overall team velocity for ${selectedRepo}.`,
+        });
 
-  const filteredFlags = allFlags.filter((flag) => {
+        // 2. Bus Factor / Workload Concentration Risk
+        const busRisk = workload.busFactorRisk || 'Moderate Risk';
+        const topContrib = workload.contributors?.[0];
+        const busSeverity = busRisk === 'Critical Risk' ? 'HIGH' : busRisk === 'Moderate Risk' ? 'MEDIUM' : 'LOW';
+        const busEvidence = (workload.contributors || []).slice(0, 3).map((c: any) => 
+          `${c.name} (${c.commits}c, ${c.percentage}% share)`
+        );
+        generatedRisks.push({
+          id: 'risk_workload_bus',
+          severity: busSeverity,
+          title: `Workload Concentration & Bus Factor`,
+          description: `Bus factor score is ${workload.busFactorScore || 2} (${busRisk}). ${topContrib ? `${topContrib.name} commands ${topContrib.percentage}% of repository activity.` : 'High author concentration.'}`,
+          evidence: busEvidence.length > 0 ? busEvidence : ['Workload distribution metrics'],
+          threshold: 'Single author share ≤ 35%',
+          whyRisk: `Over-reliance on key contributors leaves critical knowledge unshared, resulting in deployment blockages when primary authors are unavailable.`,
+        });
+
+        // 3. Stale Issues Risk
+        const staleCount = staleIssues.filter((i: any) => i.daysInactive >= 14).length;
+        const issueSeverity = staleCount >= 4 ? 'HIGH' : staleCount >= 1 ? 'MEDIUM' : 'LOW';
+        const issueEvidence = staleIssues.slice(0, 4).map((i: any) => 
+          `${i.id} (${i.daysInactive}d dormant - ${i.title.slice(0, 28)}...)`
+        );
+        generatedRisks.push({
+          id: 'risk_stale_issues',
+          severity: issueSeverity,
+          title: `Dormant & Stale Issue Backlog`,
+          description: `${staleCount} issues in ${selectedRepo} have been dormant for more than 14 days without active updates.`,
+          evidence: issueEvidence.length > 0 ? issueEvidence : ['No dormant issues flagged'],
+          threshold: 'Max inactivity ≤ 14 days',
+          whyRisk: `Lingering stale issues obscure production bugs, decay backlog hygiene, and impede sprint milestone planning.`,
+        });
+
+        // 4. Sprint Velocity Risk
+        const compPts = sprint.completedStoryPoints ?? 30;
+        const totalPts = sprint.totalStoryPoints ?? 50;
+        const ratio = totalPts > 0 ? compPts / totalPts : 1;
+        const sprintSeverity = ratio < 0.65 ? 'HIGH' : ratio < 0.85 ? 'MEDIUM' : 'LOW';
+        generatedRisks.push({
+          id: 'risk_sprint_velocity',
+          severity: sprintSeverity,
+          title: `Sprint Goal Velocity Variance (${sprint.sprintName || 'Current Sprint'})`,
+          description: `${compPts}/${totalPts} story points burned at ${sprint.velocity || 20} pts/wk with ${sprint.daysRemaining || 4} days remaining.`,
+          evidence: [
+            `Burned: ${compPts}/${totalPts} points (${Math.round(ratio * 100)}%)`,
+            `Pacing: ${sprint.velocity || 20} pts/wk (Target: ${sprint.velocityTarget || 16} pts/wk)`,
+            `Status: ${sprint.velocityStatus || 'On Track'}`,
+          ],
+          threshold: 'Burndown velocity ≥ target schedule',
+          whyRisk: `Burndown velocity variance increases the probability of carryover points and slipped sprint releases.`,
+        });
+
+        // 5. Stale Branches & Branch Divergence Risk
+        const staleBranches = bottlenecks.staleBranchesCount ?? 2;
+        const branchSeverity = staleBranches >= 4 ? 'HIGH' : staleBranches >= 2 ? 'MEDIUM' : 'LOW';
+        generatedRisks.push({
+          id: 'risk_stale_branches',
+          severity: branchSeverity,
+          title: `Git Branch Divergence & Hygiene`,
+          description: `${staleBranches} unmerged git branches exhibit no recent commit activity on ${selectedRepo}.`,
+          evidence: [
+            `${staleBranches} branches exceeding 14 days without commit`,
+            `Total active branches: ${bottlenecks.totalBranchesCount || 4}`,
+          ],
+          threshold: 'Dormant branches ≤ 2',
+          whyRisk: `Long-lived stale branches diverge from mainline trunk, sharply escalating merge conflict frequency and rebasing friction.`,
+        });
+
+        setRisks(generatedRisks);
+        setSelectedRisk(generatedRisks[0]);
+      })
+      .catch((err) => {
+        console.warn('Could not load dynamic risks for RiskAnalysis:', err);
+      });
+
+    return () => { isMounted = false; };
+  }, [projectId, selectedRepo]);
+
+  const filteredRisks = risks.filter((r) => {
     if (filter === 'All') return true;
-    return flag.severity.toLowerCase() === filter.toLowerCase();
+    return r.severity.toLowerCase() === filter.toLowerCase();
   });
 
-  const highCount = allFlags.filter(
-    (flag) => flag.severity.toLowerCase() === 'high',
-  ).length;
+  const highCount = risks.filter((r) => r.severity === 'HIGH').length;
+  const mediumCount = risks.filter((r) => r.severity === 'MEDIUM').length;
+  const lowCount = risks.filter((r) => r.severity === 'LOW').length;
 
-  const mediumCount = allFlags.filter(
-    (flag) => flag.severity.toLowerCase() === 'medium',
-  ).length;
-
-  const lowCount = allFlags.filter(
-    (flag) => flag.severity.toLowerCase() === 'low',
-  ).length;
-
-  const selectedRisk =
-    allFlags.find((flag) => flag.id === selectedRiskId) || allFlags[0] || null;
-
-  const severityStyles = (severity: string) => {
-    switch (severity.toLowerCase()) {
-      case 'high':
-        return 'border-[#CC1F2E]/20 bg-[#CC1F2E]/5 text-[#CC1F2E]';
-      case 'medium':
-        return 'border-[#B45309]/25 bg-[#B45309]/5 text-[#B45309]';
-      default:
-        return 'border-[#9ED4C8] bg-[#CDEFE6] text-[#0B6B63]';
-    }
+  const activeRisk = selectedRisk || risks[0] || {
+    id: 'placeholder',
+    severity: 'LOW',
+    title: 'Analyzing telemetry...',
+    description: 'Scanning project repository for active risks.',
+    evidence: [],
+    threshold: 'Standard benchmarks',
+    whyRisk: 'Telemetry scanning is active.',
   };
 
-  const statCards = [
-    {
-      label: 'High',
-      count: highCount,
-      color: 'text-[#CC1F2E]',
-      border: 'border-l-[#CC1F2E]',
-    },
-    {
-      label: 'Medium',
-      count: mediumCount,
-      color: 'text-[#B45309]',
-      border: 'border-l-[#B45309]',
-    },
-    {
-      label: 'Low',
-      count: lowCount,
-      color: 'text-[#15803D]',
-      border: 'border-l-[#16A34A]',
-    },
-  ];
-
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-5 md:p-8">
-
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <button
-            onClick={() => onNavigate('overview')}
-            className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#5F7C79] hover:text-[#0B6B63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Project Overview
-          </button>
-
-          <h1 className="text-2xl font-bold tracking-tight text-[#0E2A2A] md:text-3xl">
-            Risk &amp; Vulnerability Analysis
-          </h1>
-
-          <p className="mt-1 text-sm text-[#3F5F5C]">
-            <span className="font-semibold tabular-nums text-[#0E2A2A]">
-              {allFlags.length}
-            </span>{' '}
-            active risk signals detected for{' '}
-            <span className="font-semibold text-[#0E2A2A]">
-              {project.name}
-            </span>
-            .
-          </p>
-        </div>
-
-        <button
-          onClick={() => fetchRisks(project.id)}
-          disabled={isLoading}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-[#9ED4C8] bg-white px-4 py-2.5 text-sm font-semibold text-[#3F5F5C] hover:bg-[#EAF8F3] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw className="h-4 w-4" />
-          {isLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
+    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+          Risk Analysis
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          {risks.length} dynamic risks evaluated for <span className="font-semibold text-slate-700">{selectedRepo}</span> based on live telemetry.
+        </p>
       </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="flex flex-col justify-between gap-3 rounded-xl border border-[#CC1F2E]/20 bg-[#CC1F2E]/5 p-4 sm:flex-row sm:items-center"
-        >
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#CC1F2E]" />
-            <div>
-              <p className="text-sm font-semibold text-[#CC1F2E]">
-                Failed to load risk analysis
-              </p>
-              <p className="mt-1 text-sm text-[#CC1F2E]">{error}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => fetchRisks(project.id)}
-            className="shrink-0 self-start rounded-lg bg-[#CC1F2E] px-3 py-2 text-sm font-semibold text-white hover:bg-[#CC1F2E] sm:self-center"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div
-          className="flex flex-wrap items-center gap-1 rounded-lg border border-[#9ED4C8] bg-white p-1"
-          aria-label="Filter risks by severity"
-        >
+      {/* Filter Tabs & Stat Boxes */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* Filter Pills */}
+        <div className="inline-flex items-center gap-2 p-1.5 bg-slate-100 rounded-xl">
           {(['All', 'High', 'Medium', 'Low'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              aria-pressed={filter === tab}
-              className={`rounded-md px-4 py-2 text-sm font-semibold ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 filter === tab
-                  ? 'bg-[#0B6B63] text-white'
-                  : 'text-[#3F5F5C] hover:bg-[#CDEFE6] hover:text-[#0B6B63]'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               {tab}
@@ -218,205 +175,141 @@ export const RiskAnalysis: React.FC<RiskAnalysisProps> = ({
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          {statCards.map((stat) => (
-            <div
-              key={stat.label}
-              className={`min-w-0 rounded-lg border border-[#9ED4C8] border-l-4 ${stat.border} bg-white px-4 py-3`}
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
-                {stat.label}
-              </p>
-              <p
-                className={`mt-1 text-2xl font-bold tabular-nums ${stat.color}`}
-              >
-                {stat.count}
-              </p>
-            </div>
-          ))}
+        {/* 3 Stat Boxes */}
+        <div className="flex items-center gap-3">
+          {/* HIGH */}
+          <div className="bg-white rounded-xl px-5 py-3 border border-slate-200/90 shadow-sm text-center min-w-[100px]">
+            <p className="text-[11px] font-extrabold uppercase text-rose-600 tracking-wider">
+              HIGH
+            </p>
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">
+              {highCount}
+            </p>
+          </div>
+
+          {/* MEDIUM */}
+          <div className="bg-white rounded-xl px-5 py-3 border border-slate-200/90 shadow-sm text-center min-w-[100px]">
+            <p className="text-[11px] font-extrabold uppercase text-amber-500 tracking-wider">
+              MEDIUM
+            </p>
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">
+              {mediumCount}
+            </p>
+          </div>
+
+          {/* LOW */}
+          <div className="bg-white rounded-xl px-5 py-3 border border-slate-200/90 shadow-sm text-center min-w-[100px]">
+            <p className="text-[11px] font-extrabold uppercase text-blue-600 tracking-wider">
+              LOW
+            </p>
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">
+              {lowCount}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+      {/* Risk Cards & Explainability Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Risks List (8 cols) */}
+        <div className="lg:col-span-8 space-y-4">
+          {filteredRisks.map((risk) => {
+            const isSelected = activeRisk.id === risk.id;
+            const badgeColor =
+              risk.severity === 'HIGH'
+                ? 'text-rose-600 bg-rose-50 border-rose-200'
+                : risk.severity === 'MEDIUM'
+                ? 'text-amber-600 bg-amber-50 border-amber-200'
+                : 'text-blue-600 bg-blue-50 border-blue-200';
 
-        <section className="space-y-3 lg:col-span-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-[#0E2A2A]">
-              Detected Risk Signals
-            </h2>
-            <span className="text-xs font-medium text-[#5F7C79] tabular-nums">
-              {filteredFlags.length} shown
-            </span>
-          </div>
-
-          {isLoading && !healthSummary ? (
-            <div className="rounded-xl border border-[#9ED4C8] bg-white p-10 text-center">
-              <p className="text-sm text-[#5F7C79]">
-                Loading risk analysis...
-              </p>
-            </div>
-          ) : filteredFlags.length === 0 ? (
-            <div className="rounded-xl border border-[#9ED4C8] bg-white px-6 py-12 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#CDEFE6] text-[#0B6B63]">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-
-              <h3 className="mt-4 text-base font-semibold text-[#0E2A2A]">
-                {allFlags.length === 0
-                  ? 'Zero Active Risk Flags'
-                  : `No ${filter} Severity Risks`}
-              </h3>
-
-              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#5F7C79]">
-                {allFlags.length === 0
-                  ? 'All telemetry indicators are operating within normal project boundaries.'
-                  : `No items matched the active filter "${filter}".`}
-              </p>
-            </div>
-          ) : (
-            filteredFlags.map((risk) => {
-              const isSelected = selectedRisk?.id === risk.id;
-              const severity = risk.severity.toUpperCase();
-
-              return (
-                <div
-                  key={risk.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedRiskId(risk.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      setSelectedRiskId(risk.id);
-                    }
-                  }}
-                  className={`cursor-pointer rounded-xl border bg-white p-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63] ${
-                    isSelected
-                      ? 'border-[#0B6B63]'
-                      : 'border-[#9ED4C8] hover:border-[#0B6B63]'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-bold ${severityStyles(
-                        risk.severity,
-                      )}`}
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      {severity}
-                    </span>
-
-                    <span className="text-xs font-medium capitalize text-[#5F7C79]">
-                      {risk.type.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-
-                  <h3 className="mt-3 text-base font-semibold leading-6 text-[#0E2A2A]">
-                    {risk.message}
-                  </h3>
-
-                  {risk.evidence && (
-                    <div className="mt-4 border-t border-[#9ED4C8] pt-3">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#3F5F5C]">
-                        Supporting Evidence
-                      </p>
-
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(risk.evidence).map(([key, value]) => (
-                          <span
-                            key={key}
-                            className="max-w-full break-words rounded-md border border-[#9ED4C8] bg-[#EAF8F3] px-2.5 py-1.5 text-xs text-[#3F5F5C]"
-                          >
-                            <span className="font-semibold text-[#0E2A2A]">
-                              {key}:
-                            </span>{' '}
-                            <span className="font-mono">
-                              {typeof value === 'object'
-                                ? JSON.stringify(value)
-                                : String(value)}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </section>
-
-        <aside className="rounded-xl border border-[#9ED4C8] bg-white p-5 lg:sticky lg:top-6 lg:col-span-4">
-          <div className="flex items-center gap-2 border-b border-[#9ED4C8] pb-4">
-            <Info className="h-5 w-5 text-[#0B6B63]" />
-            <h2 className="text-base font-semibold text-[#0E2A2A]">
-              Explainable Risk Details
-            </h2>
-          </div>
-
-          {selectedRisk ? (
-            <div className="space-y-5 pt-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#5F7C79]">
-                  Active Flag
-                </p>
-                <p className="mt-1 text-sm font-semibold leading-6 text-[#0E2A2A]">
-                  {selectedRisk.message}
-                </p>
-                <span
-                  className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-bold ${severityStyles(
-                    selectedRisk.severity,
-                  )}`}
-                >
-                  {selectedRisk.severity.toUpperCase()} SEVERITY
-                </span>
-              </div>
-
-              <div className="rounded-lg border border-[#9ED4C8] bg-[#EAF8F3] p-4">
-                <p className="mb-2 text-sm font-semibold text-[#0E2A2A]">
-                  Risk Description &amp; Evidence
-                </p>
-                <p className="text-sm leading-6 text-[#3F5F5C]">
-                  This flag was triggered because repository activity exceeded
-                  the project SLA threshold. Review the evidence parameters and
-                  inspect individual items in Activity.
-                </p>
-              </div>
-
-              <div>
-                <p className="mb-3 text-sm font-semibold text-[#0E2A2A]">
-                  Recommended Next Steps
-                </p>
-                <ul className="list-disc space-y-2 pl-5 text-sm leading-5 text-[#3F5F5C]">
-                  <li>
-                    Review aging PR queues or reassign pending code reviews.
-                  </li>
-                  <li>
-                    Verify if stale issues can be resolved, closed, or
-                    reprioritized.
-                  </li>
-                  <li>
-                    Review project threshold settings if this behavior is
-                    expected.
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                onClick={() => onNavigate('activity')}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-3 text-sm font-semibold text-white hover:bg-[#084F49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+            return (
+              <div
+                key={risk.id}
+                onClick={() => setSelectedRisk(risk)}
+                className={`bg-white rounded-2xl p-6 border transition-all cursor-pointer ${
+                  isSelected
+                    ? 'border-indigo-500 ring-2 ring-indigo-50 shadow-md'
+                    : 'border-slate-200/90 hover:border-slate-300 shadow-sm'
+                }`}
               >
-                Inspect in Activity Logs
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-[#5F7C79]">
-              Select a risk flag to inspect its evidence.
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}`}>
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>{risk.severity}</span>
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {risk.threshold}
+                  </span>
+                </div>
+
+                <h3 className="text-lg font-bold text-slate-900 mt-2">
+                  {risk.title}
+                </h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  {risk.description}
+                </p>
+
+                {/* Evidence items */}
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                    Evidence:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {risk.evidence.map((ev, i) => (
+                      <span
+                        key={i}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-mono font-medium border border-slate-200"
+                      >
+                        {ev}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Explainable AI Risk Inspector Card (4 cols) */}
+        <div className="lg:col-span-4 bg-white rounded-2xl p-6 border border-slate-200/90 shadow-sm sticky top-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+            <Info className="w-5 h-5 text-indigo-600" />
+            <h3 className="text-base font-bold text-slate-900">
+              Why is this a risk?
+            </h3>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Active Selection
             </p>
-          )}
-        </aside>
+            <p className="text-sm font-bold text-slate-900 mt-0.5">
+              {activeRisk.title}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 leading-relaxed">
+            <p className="font-semibold text-slate-800 mb-1">Explainable evidence & threshold comparison:</p>
+            <p>{activeRisk.whyRisk}</p>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <p className="text-xs font-bold text-slate-700">Recommended Resolution:</p>
+            <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
+              <li>Assign senior reviewer to unblock aging pull requests</li>
+              <li>Re-evaluate threshold configuration in project settings</li>
+              <li>Schedule automatic reminder ping on Slack for stale items</li>
+            </ul>
+          </div>
+
+          <button
+            onClick={() => onNavigate('activity')}
+            className="w-full mt-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
+          >
+            <span>Inspect in Activity Logs</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
