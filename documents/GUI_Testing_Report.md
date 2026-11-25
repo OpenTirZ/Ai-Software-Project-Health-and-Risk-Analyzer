@@ -1,164 +1,143 @@
-# Frontend GUI & Mobile Testing Report
+# Frontend GUI & Mobile Testing Report (Mobile Re-Run)
 
 > **AI Software Project Health & Risk Analyzer (कVaच / Kavach)**  
 > **Course / Academic Program:** IT 314 Software Engineering, DA-IICT (DAU)  
-> **Evaluation Phase:** Comprehensive Frontend Quality Assurance & GUI Verification  
-> **Focus Viewport:** **Mobile (375px × 812px — iPhone Standard)**  
-> **Date:** November 24, 2026  
-> **Test Lead / Author:** @Ompatel75 (Om Patel) & Team OpenTirZ  
-> **Overall Verdict:** ✅ **PASS (55 / 55 Automated Tests Passing — 100% Pass Rate)**  
+> **Evaluation Phase:** Mobile (375px × 812px) GUI Re-Test After Responsive Merge  
+> **Commit Hash Tested:** `8ba1e99` (`Om_Patel` merged with `origin/main`)  
+> **Date:** November 25, 2026  
+> **Test Lead / Author:** @Ompatel75 (Om Patel)  
+> **Scope Note:** **Mobile (375×812) only.** Tablet (768px) and Desktop (1440px) viewports were **not** re-run in this pass.  
+> **Overall Mobile Re-Test Verdict:** ⚠️ **PARTIAL PASS** — Zero horizontal overflow on all 17 routes; **2 critical functional/UI failures** (`/reports` runtime crash, expired-token redirect failure) + **widespread tap-target (< 44px) and input font-size (< 16px) WCAG/iOS failures**; **Vitest:** 57/61 tests passed (6/9 files passed, 3 files failed).
 
 ---
 
 ## Table of Contents
 
-1. [Executive Summary & Test Objectives](#1-executive-summary--test-objectives)
-2. [Component Testing Results (Vitest Suite)](#2-component-testing-results-vitest-suite)
-3. [Mobile (375px) Responsive Layout Matrix](#3-mobile-375px-responsive-layout-matrix)
-4. [Form & Error State Validation Matrix](#4-form--error-state-validation-matrix)
-5. [Visual Screenshot Evidence & Layout Verification](#5-visual-screenshot-evidence--layout-verification)
-6. [Accessibility (a11y) & Touch Target Analysis](#6-accessibility-a11y--touch-target-analysis)
-7. [Defect Log, Observations & Recommendations](#7-defect-log-observations--recommendations)
+1. [Executive Summary & Test Commands](#1-executive-summary--test-commands)
+2. [Mobile Re-Test: Before vs After](#2-mobile-re-test-before-vs-after)
+3. [Component Regression Check (Vitest Suite)](#3-component-regression-check-vitest-suite)
+4. [Mobile (375×812) Responsive Layout Matrix](#4-mobile-375x812-responsive-layout-matrix)
+5. [Mobile (375×812) Form & Error-State Validation Matrix](#5-mobile-375x812-form--error-state-validation-matrix)
+6. [Known Issues (Remaining FAILs)](#6-known-issues-remaining-fails)
 
 ---
 
-## 1. Executive Summary & Test Objectives
+## 1. Executive Summary & Test Commands
 
-### Objective
-Execute rigorous graphical user interface (GUI) verification on the React frontend of the **AI Software Project Health & Risk Analyzer** with targeted focus on the **Mobile Viewport (375px)**, validating:
-1. **Component Render Integrity:** Automated component testing with Vitest and React Testing Library covering dashboard widgets, forms, auth cards, and telemetry summaries.
-2. **Mobile Responsive Architecture:** Verification of mobile navigation drawer, hamburger trigger buttons, vertical card stacking, touch target compliance (min 44px), and elimination of horizontal overflow blowouts on small screens (375px).
-3. **Form & Negative Error State Validation:** Rigorous error handling verification for invalid email syntaxes, disposable email domains, password whitespace rejections, confirmation mismatches, 401 Bad Credentials, 403 Forbidden role guards, and network timeout fallbacks.
+Following the merge of the mobile-responsive frontend into `main` (merged into `Om_Patel` at `8ba1e99`), all stale mobile results and screenshots (`documents/screenshots/mobile_01..06_375px.png`, `mobile_login_375px.png`, `mobile_signup_375px.png`) were removed and replaced with real-browser Playwright checks at `375×812` using mocked API responses (`page.route('**/api/**', ...)`).
 
-### Environment & Tooling
-- **Test Runner:** Vitest v2.1.9 (`vitest run`)
-- **Testing Library:** `@testing-library/react` v16.1.0, `@testing-library/user-event` v14.5.2, `@testing-library/jest-dom` v6.6.3
-- **DOM Simulation Environment:** JSDOM v25.0.1
-- **Headless Browser Capture:** Google Chrome v131+ Headless (`--headless=new`, `--window-size=375,812`)
-- **Production Bundle Tool:** Vite v8.3.8 + TypeScript v5.7 (zero compile errors)
+### Commands & Scripts Executed
+- **Component Regression (Vitest):**
+  ```powershell
+  cd Frontend
+  npm test
+  ```
+- **Mobile E2E & Responsive Audit (Playwright + Headless Chrome, `375×812`):**
+  ```powershell
+  cd Frontend
+  npx vite --port 5173 --host 127.0.0.1
+  npx playwright test tests/e2e/mobile.spec.ts
+  ```
+- **Persistent Test Script:** [Frontend/tests/e2e/mobile.spec.ts](Frontend/tests/e2e/mobile.spec.ts) (configured via [Frontend/playwright.config.ts](Frontend/playwright.config.ts)).
 
 ---
 
-## 2. Component Testing Results (Vitest Suite)
+## 2. Mobile Re-Test: Before vs After
 
-The automated frontend test suite was executed via `npm test` across all component modules:
+| Area | Old Verdict (Nov 24, `1ad1be2`) | New Verdict (Nov 25, `8ba1e99`) | What Changed |
+| :--- | :---: | :---: | :--- |
+| **Vitest Component Suite** | ✅ PASS (55 / 55, 7/7 files) | ❌ **FAIL** (57 / 61, 6/9 files) | `AdminAccess.test.tsx` & `HealthScoreCard.test.tsx` fail to collect because `recharts` is missing from `Frontend/package.json`; 4/8 tests in `MobileResponsiveAndErrors.test.tsx` fail due to new `md:hidden` / `hidden md:flex` drawer architecture (while new `MobileNavigation.test.tsx` passes 11/11). |
+| **Horizontal Overflow (`scrollWidth <= 375`)** | ✅ PASS (6 routes) | ✅ **PASS** (17 / 17 routes) | Expanded from 6 to all 17 router paths; all 17 report `scrollWidth === 375` (`hasHorizontalOverflow: false`). |
+| **Mobile Navigation Drawer** | ✅ PASS | ✅ **PASS** | Refactored to `MobileNavigation` + `md:hidden` hamburger trigger; opens, navigates, and closes cleanly at 375px. |
+| **Reports Page (`/projects/:id/reports`)** | *Not tested* | ❌ **FAIL** | Throws uncaught `TypeError: Cannot read properties of undefined (reading 'length')` at `Reports.tsx:358` when `healthFlags.active_flags` is absent, rendering a blank white screen. |
+| **Expired Token Redirect** | ✅ PASS (JSDOM unit) | ❌ **FAIL** (Real browser E2E) | `api.ts` clears `aegis_token` on 401 inside `getMe()` before `App.tsx` checks `localStorage.getItem('aegis_token') !== token`, leaving `isAuthenticated = true` on `/projects` instead of redirecting to `/login`. |
+| **Tap Targets (≥ 44×44px)** | ✅ PASS (claimed) | ❌ **FAIL** | Real DOM `getBoundingClientRect()` audit found controls `< 44px` on every route (e.g., TopBar icons `32×32px`, password toggle `26×32px`, drawer links `40px` height). |
+| **Input Font Size (≥ 16px iOS zoom)** | *Not measured* | ❌ **FAIL** | Form inputs across Login, SignUp, Projects, Create Project, Connect Repo, Admin, and TopBar search use `12px`–`14px` font size (`< 16px`). |
+
+---
+
+## 3. Component Regression Check (Vitest Suite)
+
+Executed `npm test` (`vitest run`) at commit `8ba1e99`:
 
 ```text
-================================================================================
- RUN  v2.1.9 C:/Users/ommal/OneDrive/Desktop/Projects/IT 314 PROJECT/local_repo/Frontend
-================================================================================
-
- ✓ src/tests/ActivityTelemetry.test.ts (12 tests) 134ms
- ✓ src/tests/ProtectedRoute.test.tsx (4 tests) 139ms
- ✓ src/tests/MobileResponsiveAndErrors.test.tsx (8 tests) 463ms
- ✓ src/tests/SignUp.test.tsx (10 tests) 936ms
- ✓ src/tests/UserProfile.test.tsx (9 tests) 844ms
- ✓ src/tests/NotificationPanel.test.tsx (7 tests) 1109ms
- ✓ src/tests/AdminAccess.test.tsx (5 tests) 1873ms
-
- Test Files  7 passed (7)
-      Tests  55 passed (55)
-   Duration  8.42s
-================================================================================
+ Test Files  3 failed | 6 passed (9)
+      Tests  4 failed | 57 passed (61)
+   Duration  20.36s
 ```
 
-### Detailed Breakdown by Test Suite
-
-| Test Suite / File | Target Component / Capability | Tests Executed | Passed | Status | Key Verifications |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| `MobileResponsiveAndErrors.test.tsx` | Mobile Drawer & Negative Alerts | 8 | 8 | ✅ PASS | Drawer slide-in/out (`translate-x-0`), backdrop dismiss, invalid email, 401 alert, network failure fallback, password mismatch. |
-| `SignUp.test.tsx` | User Registration Form & Whitespace | 10 | 10 | ✅ PASS | Password whitespace rejection (leading, trailing, internal space), required fields, email format. |
-| `UserProfile.test.tsx` | Profile & Monitored Repositories | 9 | 9 | ✅ PASS | Real repository count from backend, placeholder loading states, profile data binding. |
-| `NotificationPanel.test.tsx` | Alert Center & Notification Drawer | 7 | 7 | ✅ PASS | Dismiss notification, unread count badge indicator, empty state rendering, mark all as read. |
-| `AdminAccess.test.tsx` | Role-Based Access Guards (RBAC) | 5 | 5 | ✅ PASS | Developers redirected away from `/admin`, session verification, unprivileged state until verified. |
-| `ProtectedRoute.test.tsx` | Route Protection & Session Recovery | 4 | 4 | ✅ PASS | Session restoration loader, redirect unauthenticated users to `/login`, route permission guards. |
-| `ActivityTelemetry.test.ts` | Telemetry Transformation Functions | 12 | 12 | ✅ PASS | Commit author aggregation, PR aging calculations, milestone progress percentages. |
-
----
-
-## 3. Mobile (375px) Responsive Layout Matrix
-
-Testing focused on the standard mobile viewport (**375px × 812px** — iPhone SE / 13 mini / 14 standard) to ensure full responsive accessibility and prevent layout breakage.
-
-| Test ID | View / Component | Viewport | Target Behavior & Criteria | Observed Result | Verdict |
-| :---: | :--- | :---: | :--- | :--- | :---: |
-| **M-01** | **TopBar Navigation** | 375px | Mobile hamburger menu (`<Menu />`) visible on mobile (`lg:hidden`). Accessible button with `aria-label="Open navigation menu"`. | Hamburger rendered at 32×32px, `aria-label` present, triggers drawer open. | ✅ **PASS** |
-| **M-02** | **Mobile Sidebar Drawer** | 375px | Hidden off-screen by default (`-translate-x-full`). On menu trigger, slides in smoothly (`translate-x-0`) with dark overlay backdrop (`bg-black/40`). | Drawer occupies `w-[260px]`, full screen height, backdrop button dismisses drawer cleanly. | ✅ **PASS** |
-| **M-03** | **Login Screen** | 375px | Hero branding and form stack vertically into single column (`flex-col md:flex-row`). Inputs span full width (`w-full`) with comfortable margins. | Form centered, submit button touch height 48px, zero horizontal scrolling. | ✅ **PASS** |
-| **M-04** | **SignUp Screen** | 375px | All 4 form inputs (Name, Email, Password, Confirm Password) stack cleanly. Inline error messages wrap without layout shift. | Inputs rendered full width, helper text readable, submit button accessible. | ✅ **PASS** |
-| **M-05** | **Project Overview (KPIs)**| 375px | Metric cards (Health Score, Bus Factor, Stale PRs, Open Issues) collapse to 1 column (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`). | Cards stack vertically with 12px gap, numbers legible, no horizontal clipping. | ✅ **PASS** |
-| **M-06** | **Health Analysis** | 375px | Health gauge scales responsively. Indicator breakdown cards stack into single column. | Radial gauge auto-scales within 320px inner width; sub-category scores stack cleanly. | ✅ **PASS** |
-| **M-07** | **Risk Analysis & Flags** | 375px | Active risk table and flags list wrap cleanly; tables have `overflow-x-auto` container to allow smooth touch swiping. | Tables swipe horizontally without breaking page viewport width. | ✅ **PASS** |
-| **M-08** | **Breadcrumbs & Header** | 375px | Project title truncates with ellipsis (`max-w-[180px] truncate`) so icons and profile actions remain visible. | Text truncates gracefully, branch indicator badges remain legible. | ✅ **PASS** |
-| **M-09** | **Notification Panel** | 375px | Notification drawer opens full width or 320px drawer with high z-index, readable alert cards and dismiss buttons. | Panel occupies 100% viewport width with dismiss controls easily clickable. | ✅ **PASS** |
-| **M-10** | **Admin User Table** | 375px | Large table columns wrapped in responsive scrolling container; role badges maintain contrast. | Container has `overflow-x-auto`, prevent horizontal blowout on 375px screens. | ✅ **PASS** |
+| Test File | Tests | Passed | Failed | Status | Failure Details |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| `src/tests/ActivityTelemetry.test.ts` | 12 | 12 | 0 | ✅ PASS | — |
+| `src/tests/ProtectedRoute.test.tsx` | 4 | 4 | 0 | ✅ PASS | — |
+| `src/tests/UserProfile.test.tsx` | 9 | 9 | 0 | ✅ PASS | — |
+| `src/tests/MobileNavigation.test.tsx` | 11 | 11 | 0 | ✅ PASS | New suite covering updated mobile drawer. |
+| `src/tests/NotificationPanel.test.tsx` | 7 | 7 | 0 | ✅ PASS | — |
+| `src/tests/SignUp.test.tsx` | 10 | 10 | 0 | ✅ PASS | — |
+| `src/tests/AdminAccess.test.tsx` | 0 | 0 | 0 | ❌ **FAIL** | Suite collection error: `Failed to resolve import "recharts" from "src/components/dashboard/HealthScoreCard.tsx"`. |
+| `src/tests/HealthScoreCard.test.tsx` | 0 | 0 | 0 | ❌ **FAIL** | Suite collection error: `Failed to resolve import "recharts" from "src/components/dashboard/HealthScoreCard.tsx"`. |
+| `src/tests/MobileResponsiveAndErrors.test.tsx` | 8 | 4 | 4 | ❌ **FAIL** | Legacy assertions expect `-translate-x-full`/`translate-x-0` and `lg:hidden`, whereas merged code uses `hidden md:flex`, `md:hidden`, and two `Close navigation menu` buttons. |
 
 ---
 
-## 4. Form & Error State Validation Matrix
+## 4. Mobile (375×812) Responsive Layout Matrix
 
-Tested negative scenarios, input boundary edge cases, and server failure simulations across authentication and project management forms.
+All 17 routes in `Frontend/src/App.tsx` plus the open mobile navigation drawer were audited in headless Chrome at `375×812` with `meta[name="viewport"]` = `width=device-width, initial-scale=1.0`.
 
-| Test ID | Test Scenario | Input / Trigger | Expected Outcome | Actual UI Behavior | Verdict |
-| :---: | :--- | :--- | :--- | :--- | :---: |
-| **E-01** | **Invalid Email Format** | `user@` or `invalid-email` on SignUp / Login | Native HTML5 constraint validation and client-side regex block submission. | Input marked `aria-invalid="true"`, submission blocked, error shown. | ✅ **PASS** |
-| **E-02** | **Disposable Email Domain** | `test@mailinator.com` on SignUp | Client-side blocklist check flags temporary email domain without external DNS calls. | Inline error: *"Disposable/temporary email domains are not allowed."* | ✅ **PASS** |
-| **E-03** | **Password Internal Whitespace** | `Secure Pass 123!` on SignUp | Immediate client-side rejection of spaces inside passwords. | Inline error: *"Password must not contain spaces or whitespace characters."* | ✅ **PASS** |
-| **E-04** | **Password Leading/Trailing Space**| ` Secure123!` or `Secure123! ` | Immediate rejection of whitespace at boundaries. | Inline error shown, form submit blocked, no API request dispatched. | ✅ **PASS** |
-| **E-05** | **Password Mismatch** | `Pass1` vs `Pass2` on SignUp | Inline error prevents form submission. | Inline error: *"Passwords do not match."* Dispatched zero requests. | ✅ **PASS** |
-| **E-06** | **401 Bad Credentials** | Wrong email or password on Login | Display friendly dismissible alert banner. | Red error alert rendered: *"Invalid email or password"*. | ✅ **PASS** |
-| **E-07** | **403 Forbidden Redirection** | Developer role navigating to `/admin` | Route guard redirects user to `/projects` and displays notification. | User safely returned to All Repositories; admin endpoints never queried. | ✅ **PASS** |
-| **E-08** | **Expired / Missing Token** | Accessing `/projects` without `aegis_token` | `ProtectedRoute` redirects unauthenticated visitor to `/login`. | Redirected to `/login` immediately; private content never rendered. | ✅ **PASS** |
-| **E-09** | **Network Failure / Timeout** | Backend down / API unreachable | Display resilient error alert without blank screen or unhandled exception. | Friendly alert displayed: *"Network Error: Failed to fetch"*. UI remains interactive. | ✅ **PASS** |
-| **E-10** | **Empty Project Name** | Whitespace-only project name on Create | Form validation highlights required field. | Field highlights in red, submit button disabled until valid input provided. | ✅ **PASS** |
-
----
-
-## 5. Visual Screenshot Evidence & Layout Verification
-
-Full-page mobile screenshots were rendered using headless Google Chrome (`--headless=new --window-size=375,812`) to verify real visual presentation on mobile screens.
-
-```
-documents/screenshots/
-├── mobile_01_login_375px.png             # Login view with single-column responsive stacking (347 KB)
-├── mobile_02_signup_375px.png            # SignUp view with full-width fields & branding (343 KB)
-├── mobile_03_projects_375px.png          # All Repositories list view adapted for mobile (347 KB)
-├── mobile_04_create_project_375px.png    # Create Project form layout (347 KB)
-├── mobile_05_connect_repo_375px.png      # GitHub repository connection interface (347 KB)
-└── mobile_06_profile_375px.png           # User Profile & security settings mobile view (347 KB)
-```
-
-### Visual Highlights
-1. **Login & SignUp (`mobile_01_login_375px.png`, `mobile_02_signup_375px.png`):**
-   - Single-column vertical layout (`flex-col`) ensures branding banner sits cleanly above the form without squeezing inputs.
-   - Text fields have 44px+ vertical touch height with high-contrast borders (`#9ED4C8`).
-2. **Projects & Repositories (`mobile_03_projects_375px.png`):**
-   - Repository cards stack with 100% width on mobile screens, displaying status pills and action buttons without overlapping.
-3. **Drawer Navigation (`mobile_05_connect_repo_375px.png`):**
-   - Hamburger button occupies standard top-left placement (`h-8 w-8`).
-   - Active navigation items feature high-contrast gradient badges (`from-[#C8102E] to-[#8A000F]`).
+| Page / Route | No Horiz. Scroll (`<=375`) | Viewport Meta & Render | Nav / Stacking / Containers | Tap Targets (`>=44px`) | Input Font (`>=16px`) | Overall Verdict | Screenshot |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| `/login` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks 1-col | ❌ FAIL (2: `26×32`, `51×20`) | ❌ FAIL (`14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_login_default.png](screenshots/mobile/mobile_login_default.png) |
+| `/signup` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks 1-col | ❌ FAIL (3: `26×32`, `37×20`) | ❌ FAIL (`14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_signup_default.png](screenshots/mobile/mobile_signup_default.png) |
+| `/projects` | ✅ PASS (`375`) | ✅ PASS | ✅ Cards stack | ❌ FAIL (6: `32×32`, `40px` h) | ❌ FAIL (`14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_projects_default.png](screenshots/mobile/mobile_projects_default.png) |
+| `/projects/create` | ✅ PASS (`375`) | ✅ PASS | ✅ Form stacks | ❌ FAIL (6: `32×32`, `133×20`) | ❌ FAIL (`14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_create_project_default.png](screenshots/mobile/mobile_create_project_default.png) |
+| `/projects/connect` | ✅ PASS (`375`) | ✅ PASS | ✅ Form stacks | ❌ FAIL (7: `32×32`, `112×16`) | ❌ FAIL (`14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_connect_repo_default.png](screenshots/mobile/mobile_connect_repo_default.png) |
+| `/projects/:id/overview` | ✅ PASS (`375`) | ✅ PASS | ✅ Cards stack; header truncates | ❌ FAIL (12: `32×32`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_overview_default.png](screenshots/mobile/mobile_overview_default.png) |
+| `/projects/:id/dashboard` | ✅ PASS (`375`) | ✅ PASS | ✅ Cards stack | ❌ FAIL (6: `32×32`, `29×32`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_dashboard_default.png](screenshots/mobile/mobile_dashboard_default.png) |
+| `/projects/:id/health` | ✅ PASS (`375`) | ✅ PASS | ✅ Breakdown stacks | ❌ FAIL (7: `32×32`, `165×16`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_health_default.png](screenshots/mobile/mobile_health_default.png) |
+| `/projects/:id/risk` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks cleanly | ❌ FAIL (10: `32×32`, `191×20`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_risk_default.png](screenshots/mobile/mobile_risk_default.png) |
+| `/projects/:id/contributors` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks cleanly | ❌ FAIL (6: `32×32`, `191×20`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_contributors_default.png](screenshots/mobile/mobile_contributors_default.png) |
+| `/projects/:id/activity` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks cleanly | ❌ FAIL (6: `32×32`, `191×20`) | ❌ FAIL (`12px`, `14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_activity_default.png](screenshots/mobile/mobile_activity_default.png) |
+| `/projects/:id/reports` | ✅ PASS (`375`) | ❌ **FAIL** (Blank crash) | ❌ Uncaught `TypeError` | N/A (blank) | N/A (blank) | ❌ **FAIL** (Crash) | [mobile_reports_default.png](screenshots/mobile/mobile_reports_default.png) |
+| `/projects/:id/appeals` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks cleanly | ❌ FAIL (5: `32×32`, `118×16`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_appeals_default.png](screenshots/mobile/mobile_appeals_default.png) |
+| `/projects/:id/settings` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks cleanly | ❌ FAIL (6: `32×32`, `184×37`) | ❌ FAIL (`12px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_settings_default.png](screenshots/mobile/mobile_settings_default.png) |
+| `/profile` | ✅ PASS (`375`) | ✅ PASS | ✅ Stacks cleanly | ❌ FAIL (8: `32×32`, `119×36`) | ✅ PASS (no small inputs) | ⚠️ **FAIL** (a11y) | [mobile_profile_default.png](screenshots/mobile/mobile_profile_default.png) |
+| `/admin` | ✅ PASS (`375`) | ✅ PASS | ✅ Table/cards fit | ❌ FAIL (8: `32×32`, `138×32`) | ❌ FAIL (`12px`, `14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_admin_default.png](screenshots/mobile/mobile_admin_default.png) |
+| `/admin/audit-logs` | ✅ PASS (`375`) | ✅ PASS | ✅ Fits cleanly | ❌ FAIL (9: `32×32`, `327×37`) | ❌ FAIL (`12px`, `14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_audit_logs_default.png](screenshots/mobile/mobile_audit_logs_default.png) |
+| **Mobile Nav Drawer (Open)** | ✅ PASS (`375`) | ✅ PASS | ✅ Opens, navigates, closes | ❌ FAIL (21: `32×32`, `236×40`) | ❌ FAIL (`14px`) | ⚠️ **FAIL** (a11y/iOS) | [mobile_nav_drawer_open.png](screenshots/mobile/mobile_nav_drawer_open.png) |
 
 ---
 
-## 6. Accessibility (a11y) & Touch Target Analysis
+## 5. Mobile (375×812) Form & Error-State Validation Matrix
 
-| Criteria / Standard | Minimum Requirement | Implemented Standard | Status |
-| :--- | :---: | :--- | :---: |
-| **Button Touch Targets** | ≥ 44 × 44 pt (WCAG 2.5.5) | Primary action buttons configured with `min-h-12` (48px) and `px-5 py-3`. | ✅ **Compliant** |
-| **Form Label Bindings** | Explicit `htmlFor` & `id` (WCAG 1.3.1) | 100% of inputs bound to `<label>` tags with matching IDs. | ✅ **Compliant** |
-| **Icon-Only Buttons** | Screen-reader accessible label (WCAG 4.1.2) | Hamburger menu, password eye toggle, and modal buttons have `aria-label`. | ✅ **Compliant** |
-| **Color Contrast** | ≥ 4.5:1 for normal text (WCAG 1.4.3) | Body text `#0f172a` / `#1e293b` on `#ffffff` provides > 12:1 contrast ratio. | ✅ **Compliant** |
-| **Focus Rings** | Visible focus indicator (WCAG 2.4.7) | Focus states use `focus:ring-2 focus:ring-[#0B6B63] focus:ring-offset-2`. | ✅ **Compliant** |
+| Scenario | Expected Behavior (375px) | Actual Behavior (375px) | Verdict | Screenshot |
+| :--- | :--- | :--- | :---: | :--- |
+| **Invalid Email** (`invalid-email-no-at` on `/login`) | Format error shown, submit blocked, error message not clipped. | Error `"Email must include an \"@\" symbol (e.g. name@domain.com)."` displayed cleanly inside 375px card; submission blocked. | ✅ **PASS** | [mobile_login_invalid_email.png](screenshots/mobile/mobile_login_invalid_email.png) |
+| **Expired Token** (`GET /api/auth/me` → `401` on `/projects`) | Redirect to `/login` or show session-expired UI. | Remains on `/projects` (`TOTAL PROJECTS: 0`) instead of redirecting to `/login`. | ❌ **FAIL** | [mobile_auth_expired_token.png](screenshots/mobile/mobile_auth_expired_token.png) |
+| **Network Timeout** (`POST /api/auth/login` aborted) | Loading state, then visible error message and retryable form. | Alert `"Unable to connect to backend server at http://localhost:8000/api/auth/login. Please ensure your backend server is running."` rendered visibly; `Sign In` button re-enabled. | ✅ **PASS** | [mobile_login_network_timeout.png](screenshots/mobile/mobile_login_network_timeout.png) |
+| **403 Forbidden** (`developer` role visiting `/admin`) | Access-denied UI or safe redirect, no blank screen or crash. | `ProtectedRoute` safely redirects to `/projects` with full UI rendered (no crash/blank screen). | ✅ **PASS** | [mobile_admin_403_forbidden.png](screenshots/mobile/mobile_admin_403_forbidden.png) |
 
 ---
 
-## 7. Defect Log, Observations & Recommendations
+## 6. Known Issues (Remaining FAILs)
 
-### Key Findings & Remediated Issues
-1. **Resolved:** Sidebar previously occupied a fixed width of `w-[260px]` without responsive hide/show logic on mobile. Remediated with dynamic sliding drawer classes (`lg:static lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`) and full-screen backdrop click handler.
-2. **Resolved:** Password toggle button previously caused duplicate accessibility label collisions. Remediated by isolating the input element with strict `^password$` label matching.
-3. **Resolved:** Email domain validation was previously querying external DNS endpoints client-side. Now validated purely client-side via format regex and disposable blocklist to safeguard user privacy.
+1. **`/projects/:id/reports` Blank Screen Crash (375×812 — FAIL)**
+   - **Cause:** `Frontend/src/pages/Reports.tsx:358` reads `healthFlags.active_flags.length` without guarding `active_flags` (`healthFlags.active_flags?.length`), throwing `TypeError: Cannot read properties of undefined (reading 'length')` when `/health-summary` omits `active_flags`.
+   - **Screenshot:** [mobile_reports_default.png](screenshots/mobile/mobile_reports_default.png)
 
-### Final Verification Verdict
-> **GUI & Mobile Test Status:** ✅ **100% PASS**  
-> All 55 automated component tests passed. Mobile layout at 375px renders cleanly with zero horizontal scroll breakage, touch-compliant button sizing, and robust negative error state handling.
+2. **Expired Token Does Not Redirect to `/login` (375×812 — FAIL)**
+   - **Cause:** `authApi.getMe()` in `Frontend/src/services/api.ts:300-304` removes `aegis_token` from `localStorage` on HTTP 401/403 and returns `null`. `Frontend/src/App.tsx:252` then checks `if (localStorage.getItem('aegis_token') !== token) return;`, which evaluates `null !== token` as `true` and returns early before `setIsAuthenticated(false)` is ever called.
+   - **Screenshot:** [mobile_auth_expired_token.png](screenshots/mobile/mobile_auth_expired_token.png)
+
+3. **Missing `recharts` Dependency Breaks Vitest Suites (Vitest — FAIL)**
+   - **Cause:** `Frontend/src/components/dashboard/HealthScoreCard.tsx:3` imports `recharts`, which is not declared in `Frontend/package.json`, causing `AdminAccess.test.tsx` and `HealthScoreCard.test.tsx` to fail collection.
+
+4. **Legacy Mobile Unit Tests Out of Sync With Merged Drawer (Vitest — FAIL)**
+   - **Cause:** `Frontend/src/tests/MobileResponsiveAndErrors.test.tsx` (4/8 failing) asserts `-translate-x-full`/`translate-x-0` and `lg:hidden`, whereas the merged responsive UI uses `hidden md:flex` + `md:hidden` + `MobileNavigation` (covered by `MobileNavigation.test.tsx`, 11/11 passing).
+
+5. **Tap Targets Below 44×44px Across All Mobile Routes (375×812 — FAIL)**
+   - **Cause:** TopBar icon buttons (`32×32px`), password visibility toggles (`26×32px`), inline links (`51×20px`, `112×16px`), and drawer nav items (`40px` height) are smaller than the `44×44px` minimum touch target.
+   - **Screenshots:** [mobile_login_default.png](screenshots/mobile/mobile_login_default.png), [mobile_nav_drawer_open.png](screenshots/mobile/mobile_nav_drawer_open.png), [mobile_overview_default.png](screenshots/mobile/mobile_overview_default.png)
+
+6. **Form Input Font Size Below 16px on Mobile (375×812 — FAIL)**
+   - **Cause:** Inputs on Login, SignUp, Projects, Create Project, Connect Repo, Admin, Audit Logs, and TopBar project search use `12px`–`14px` font sizes, which triggers automatic viewport zoom on iOS Safari.
+   - **Screenshots:** [mobile_login_default.png](screenshots/mobile/mobile_login_default.png), [mobile_signup_default.png](screenshots/mobile/mobile_signup_default.png), [mobile_admin_default.png](screenshots/mobile/mobile_admin_default.png)
