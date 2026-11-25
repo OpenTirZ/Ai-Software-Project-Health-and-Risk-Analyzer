@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import mongomock
 import pytest
+from bson import ObjectId
 from fastapi.testclient import TestClient
 from mongomock.collection import BulkOperationBuilder
 from pypdf import PdfReader
@@ -193,7 +194,115 @@ def test_registered_owner_syncs_telemetry_generates_pdf_and_archives(client, git
         assert SUMMARY in pdf_text
 
     with subtests.test("Affected user submits an appeal and reads the reviewer's resolution"):
-        pytest.skip("FR-17 is planned. The backend has no appeal submission or resolution API.")
+        # 1. Register a project developer and add them to project members
+        dev_account = response_json(client.post("/api/auth/signup", json={
+            "name": "Jordan Dev", "email": "jordan.dev@example.com", "password": "developer-secure-pw",
+        }), 201)
+        dev_user = dev_account["user"]
+        dev_token = dev_account["access_token"]
+        assert dev_user["role"] == "developer"
+
+        # Update project membership to include dev_user
+        persistence.update_project(project_id, {
+            "members": [
+                {"userId": ObjectId(owner["id"]), "role": "owner"},
+                {"userId": ObjectId(dev_user["id"]), "role": "developer"},
+            ]
+        })
+
+        # 2. RBAC check: Project Manager (owner) cannot submit appeals (only developers can)
+        owner_auth_header = client.headers["Authorization"]
+        pm_submit_res = client.post(
+            f"{path}/appeals",
+            json={"flag_id": stale["id"], "reason": "PM attempting submission"},
+            headers={"Authorization": owner_auth_header},
+        )
+        assert pm_submit_res.status_code == 403
+
+        # 3. Developer submits an appeal against the active stale issues flag
+        appeal_payload = {
+            "flag_id": stale["id"],
+            "reason": "This issue is being actively refactored as part of the current sprint milestones.",
+        }
+        appeal_res = response_json(client.post(
+            f"{path}/appeals",
+            json=appeal_payload,
+            headers={"Authorization": f"Bearer {dev_token}"},
+        ), 201)
+        appeal_id = appeal_res["id"]
+        assert appeal_res["project_id"] == project_id
+        assert appeal_res["flag_id"] == stale["id"]
+        assert appeal_res["flag_type"] == "stale_issues"
+        assert appeal_res["status"] == "pending"
+        assert appeal_res["submitted_by"] == dev_user["id"]
+        assert appeal_res["reviewed_by"] is None
+        assert appeal_res["review_comment"] is None
+
+        # 4. RBAC check: Developer cannot review their own appeal
+        dev_review_res = client.patch(
+            f"{path}/appeals/{appeal_id}",
+            json={"status": "approved", "review_comment": "Self-approval attempt"},
+            headers={"Authorization": f"Bearer {dev_token}"},
+        )
+        assert dev_review_res.status_code == 403
+
+        # 5. Developer sees their own appeal in the appeals list
+        dev_appeals = response_json(client.get(
+            f"{path}/appeals",
+            headers={"Authorization": f"Bearer {dev_token}"},
+        ))
+        assert len(dev_appeals) == 1
+        assert dev_appeals[0]["id"] == appeal_id
+        assert dev_appeals[0]["status"] == "pending"
+
+        # 6. Project Manager sees all project appeals
+        pm_appeals = response_json(client.get(
+            f"{path}/appeals",
+            headers={"Authorization": owner_auth_header},
+        ))
+        assert any(a["id"] == appeal_id for a in pm_appeals)
+
+        # 7. Project Manager reviews and approves the appeal with feedback
+        review_payload = {
+            "status": "approved",
+            "review_comment": "Reviewed sprint backlog. Exemption granted for active milestone work.",
+        }
+        reviewed_appeal = response_json(client.patch(
+            f"{path}/appeals/{appeal_id}",
+            json=review_payload,
+            headers={"Authorization": owner_auth_header},
+        ))
+        assert reviewed_appeal["status"] == "approved"
+        assert reviewed_appeal["reviewed_by"] == owner["id"]
+        assert reviewed_appeal["review_comment"] == review_payload["review_comment"]
+        assert reviewed_appeal["reviewed_at"] is not None
+
+        # 8. Guard check: Already reviewed appeal cannot be reviewed again (409 Conflict)
+        conflict_res = client.patch(
+            f"{path}/appeals/{appeal_id}",
+            json={"status": "rejected", "review_comment": "Attempting secondary review"},
+            headers={"Authorization": owner_auth_header},
+        )
+        assert conflict_res.status_code == 409
+
+        # 9. Developer reads the reviewer's resolution
+        updated_dev_appeals = response_json(client.get(
+            f"{path}/appeals",
+            headers={"Authorization": f"Bearer {dev_token}"},
+        ))
+        assert len(updated_dev_appeals) == 1
+        resolved = updated_dev_appeals[0]
+        assert resolved["id"] == appeal_id
+        assert resolved["status"] == "approved"
+        assert resolved["reviewed_by"] == owner["id"]
+        assert resolved["review_comment"] == review_payload["review_comment"]
+
+        # 10. Verify that the approved appeal suppresses the contested flag in the health summary
+        # while keeping the underlying telemetry and health score intact
+        health_after_approval = response_json(client.get(f"{path}/health-summary"))
+        assert not any(f["id"] == stale["id"] for f in health_after_approval["active_flags"])
+        assert health_after_approval["flags_count"]["total"] == health["flags_count"]["total"] - 1
+        assert health_after_approval["health_score"] == health["health_score"]
 
     reports_before_archive = response_json(client.get(f"{path}/reports"))
     archived = response_json(client.post(f"{path}/archive"))

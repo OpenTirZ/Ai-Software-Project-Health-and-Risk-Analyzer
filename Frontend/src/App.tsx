@@ -27,6 +27,10 @@ import { Activity } from './pages/Activity';
 import { Reports } from './pages/Reports';
 import { UserProfile } from './pages/UserProfile';
 import { AdminPanel } from './pages/AdminPanel';
+import { Dashboard } from './pages/Dashboard';
+import { Appeals } from './pages/Appeals';
+import { ProjectSettings } from './pages/ProjectSettings';
+import { AuditLogs } from './pages/AuditLogs';
 
 function getPageView(pathname: string): PageView {
   if (pathname === '/login') return 'login';
@@ -35,11 +39,15 @@ function getPageView(pathname: string): PageView {
   if (pathname === '/projects/create') return 'create-project';
   if (pathname === '/projects/connect') return 'connect-repo';
   if (pathname.endsWith('/overview')) return 'overview';
+  if (pathname.endsWith('/dashboard')) return 'dashboard';
   if (pathname.endsWith('/health')) return 'health-analysis';
   if (pathname.endsWith('/risk')) return 'risk-analysis';
   if (pathname.endsWith('/contributors')) return 'contributors';
   if (pathname.endsWith('/activity')) return 'activity';
   if (pathname.endsWith('/reports')) return 'reports';
+  if (pathname.endsWith('/appeals')) return 'appeals';
+  if (pathname.endsWith('/settings')) return 'project-settings';
+  if (pathname === '/admin/audit-logs') return 'audit-logs';
   if (pathname === '/profile') return 'profile';
   if (pathname === '/admin') return 'admin';
   return 'projects';
@@ -48,11 +56,14 @@ function getPageView(pathname: string): PageView {
 function getProjectPath(projectId: string | undefined, view: PageView): string {
   const paths: Partial<Record<PageView, string>> = {
     overview: 'overview',
+    dashboard: 'dashboard',
     'health-analysis': 'health',
     'risk-analysis': 'risk',
     contributors: 'contributors',
     activity: 'activity',
     reports: 'reports',
+    appeals: 'appeals',
+    'project-settings': 'settings',
   };
   const subPath = paths[view];
   return projectId && subPath ? `/projects/${encodeURIComponent(projectId)}/${subPath}` : '/projects';
@@ -139,6 +150,11 @@ function HealthAnalysisRoute({ onNavigate }: { onNavigate: (view: PageView) => v
   return <HealthAnalysis project={project} onNavigate={onNavigate} />;
 }
 
+function DashboardRoute({ onNavigate }: { onNavigate: (view: PageView) => void }) {
+  const project = useRouteProject();
+  return <Dashboard project={project} onNavigate={onNavigate} />;
+}
+
 function RiskAnalysisRoute({ onNavigate }: { onNavigate: (view: PageView) => void }) {
   const project = useRouteProject();
   return <RiskAnalysis project={project} onNavigate={onNavigate} />;
@@ -157,6 +173,16 @@ function ActivityRoute({ onNavigate }: { onNavigate: (view: PageView) => void })
 function ReportsRoute({ onNavigate }: { onNavigate: (view: PageView) => void }) {
   const project = useRouteProject();
   return <Reports selectedRepo={project.name || 'Project'} project={project} onNavigate={onNavigate} />;
+}
+
+function AppealsRoute({ onNavigate }: { onNavigate: (view: PageView) => void }) {
+  const project = useRouteProject();
+  return <Appeals project={project} onNavigate={onNavigate} />;
+}
+
+function ProjectSettingsRoute({ onNavigate, onProjectChanged }: { onNavigate: (view: PageView) => void; onProjectChanged: () => void }) {
+  const project = useRouteProject();
+  return <ProjectSettings project={project} onNavigate={onNavigate} onProjectChanged={onProjectChanged} />;
 }
 
 function AppRoutes() {
@@ -259,7 +285,7 @@ function AppRoutes() {
     setActiveProject(selected);
     activeProjectIdRef.current = selected.id;
     const currentView = getPageView(location.pathname);
-    if (['overview', 'health-analysis', 'risk-analysis', 'contributors', 'activity', 'reports'].includes(currentView)) {
+    if (['overview', 'dashboard', 'health-analysis', 'risk-analysis', 'contributors', 'activity', 'reports', 'appeals', 'project-settings'].includes(currentView)) {
       navigate(getProjectPath(projectId, currentView), { replace: false });
     }
   }, [projects, location.pathname, navigate]);
@@ -279,6 +305,7 @@ function AppRoutes() {
       'connect-repo': '/projects/connect',
       profile: '/profile',
       admin: '/admin',
+      'audit-logs': '/admin/audit-logs',
     };
     navigate(staticPaths[view] || getProjectPath(activeProjectIdRef.current, view));
   }, [currentUser.role, navigate]);
@@ -421,11 +448,14 @@ function AppRoutes() {
           <ProjectSelection projects={projects} activeProject={activeProject} loadingProjects={loadingProjects} onSelectProject={onSelectProjectObject} />
         }>
           <Route path="overview" element={<div className="page-enter"><ProjectOverviewRoute onNavigate={handleNavigate} onRefreshProject={loadProjects} /></div>} />
+          <Route path="dashboard" element={<div className="page-enter"><DashboardRoute onNavigate={handleNavigate} /></div>} />
           <Route path="health" element={<div className="page-enter"><HealthAnalysisRoute onNavigate={handleNavigate} /></div>} />
           <Route path="risk" element={<div className="page-enter"><RiskAnalysisRoute onNavigate={handleNavigate} /></div>} />
           <Route path="contributors" element={<div className="page-enter"><ContributorsRoute onNavigate={handleNavigate} /></div>} />
           <Route path="activity" element={<div className="page-enter"><ActivityRoute onNavigate={handleNavigate} /></div>} />
           <Route path="reports" element={<div className="page-enter"><ReportsRoute onNavigate={handleNavigate} /></div>} />
+          <Route path="appeals" element={<div className="page-enter"><AppealsRoute onNavigate={handleNavigate} /></div>} />
+          <Route path="settings" element={<div className="page-enter"><ProjectSettingsRoute onNavigate={handleNavigate} onProjectChanged={loadProjects} /></div>} />
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Route>
@@ -435,6 +465,11 @@ function AppRoutes() {
         <Route path="admin" element={
           <ProtectedRoute isLoading={isAuthLoading} isAuthenticated={isAuthenticated} userRole={currentUser.role} requiredRole="admin">
             <div className="page-enter"><AdminPanel /></div>
+          </ProtectedRoute>
+        } />
+        <Route path="admin/audit-logs" element={
+          <ProtectedRoute isLoading={isAuthLoading} isAuthenticated={isAuthenticated} userRole={currentUser.role} requiredRole="admin">
+            <div className="page-enter"><AuditLogs /></div>
           </ProtectedRoute>
         } />
       </Route>

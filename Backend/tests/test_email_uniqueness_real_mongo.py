@@ -124,8 +124,10 @@ def clean_db(real_mongo, monkeypatch):
     )
 
     # Wire both persistence and database collections to the real live collection
-    monkeypatch.setattr(database, "users_collection", db.users)
-    monkeypatch.setattr(persistence, "users_collection", db.users)
+    users_col = db["users"]
+    db.users = users_col
+    monkeypatch.setattr(database, "users_collection", users_col)
+    monkeypatch.setattr(persistence, "users_collection", users_col)
     yield db
     db.drop_collection("users")
 

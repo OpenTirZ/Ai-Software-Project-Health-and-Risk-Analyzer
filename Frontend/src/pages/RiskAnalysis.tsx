@@ -166,7 +166,7 @@ export const RiskAnalysis: React.FC<RiskAnalysisProps> = ({
         <button
           onClick={() => fetchRisks(project.id)}
           disabled={isLoading}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-[#9ED4C8] bg-white px-4 py-2.5 text-sm font-semibold text-[#3F5F5C] hover:bg-[#EAF8F3] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full sm:w-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-[#9ED4C8] bg-white px-4 py-2.5 text-sm font-semibold text-[#3F5F5C] hover:bg-[#EAF8F3] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className="h-4 w-4" />
           {isLoading ? 'Refreshing...' : 'Refresh'}
@@ -218,7 +218,7 @@ export const RiskAnalysis: React.FC<RiskAnalysisProps> = ({
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {statCards.map((stat) => (
             <div
               key={stat.label}

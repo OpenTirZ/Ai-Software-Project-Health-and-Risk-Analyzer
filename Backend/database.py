@@ -197,7 +197,6 @@ def ensure_indexes():
             [("projectId", 1), ("status", 1)],
             background=True,
         )
-        logger.info("General database indexes ensured.")
         # Appeals: project listing and approved-flag lookups.
         appeals_collection.create_index(
             [("projectId", 1), ("submittedAt", -1)],
@@ -218,6 +217,7 @@ def ensure_indexes():
             expireAfterSeconds=90 * 24 * 60 * 60,
             background=True,
         )
+        logger.info("General database indexes ensured.")
     except Exception as exc:  # pragma: no cover
         # Non-fatal: general indexes may already exist or be created on the next startup.
         logger.warning("Could not ensure general database indexes: %s", exc)

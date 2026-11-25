@@ -83,7 +83,7 @@ export const Projects: React.FC<ProjectsProps> = ({
           <button
             type="button"
             onClick={() => onNavigate('create-project')}
-            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2 sm:flex-none"
+            className="w-full sm:w-auto inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084F49] focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2"
           >
             <Plus className="h-4 w-4" />
             Create New Project
@@ -218,7 +218,7 @@ export const Projects: React.FC<ProjectsProps> = ({
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
             <table className="w-full min-w-[760px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#9ED4C8] bg-[#EAF8F3] text-xs font-semibold uppercase tracking-wider text-slate-500">

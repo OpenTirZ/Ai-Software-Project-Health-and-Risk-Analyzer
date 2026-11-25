@@ -485,7 +485,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     const lookup = new Map(cells.map((cell) => [cell.key, cell]));
 
     commits.forEach((commit) => {
-      const time = toTime(commit?.date || commit?.authored_date || commit?.created_at);
+      const time = toTime(commit?.timestamp || commit?.date || commit?.authored_date || commit?.created_at);
       if (Number.isNaN(time)) return;
       const bucket = lookup.get(dayKey(new Date(time)));
       if (bucket) bucket.count += 1;
@@ -514,7 +514,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     const items: FeedItem[] = [];
 
     commits.forEach((commit, index) => {
-      const at = toTime(commit?.date || commit?.authored_date || commit?.created_at);
+      const at = toTime(commit?.timestamp || commit?.date || commit?.authored_date || commit?.created_at);
       if (Number.isNaN(at)) return;
       items.push({
         key: `c-${commit?.sha || index}`,
@@ -559,7 +559,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
 
   const topContributors = useMemo(() => {
     const rows = contributors.map((person) => ({
-      name: person?.login || person?.name || person?.username || 'contributor',
+      name: person?.github_username || person?.login || person?.name || person?.username || 'contributor',
       url: person?.html_url as string | undefined,
       count: Number(person?.contributions || person?.commits || 1),
     }));
@@ -645,7 +645,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   const healthScore =
     healthSummary?.health_score !== null &&
     healthSummary?.health_score !== undefined
-      ? Math.round(healthSummary.health_score)
+      ? Math.floor(healthSummary.health_score)
       : null;
 
   const healthStatus = healthSummary?.status || 'Insufficient Data';
@@ -762,7 +762,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                 type="button"
                 onClick={handleSyncAll}
                 disabled={isSyncing}
-                className="shrink-0 rounded-md bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
+                className="w-full shrink-0 rounded-md bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60 sm:w-auto"
               >
                 {isSyncing ? 'Syncing...' : 'Sync Telemetry Now'}
               </button>
@@ -795,7 +795,8 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/80 sm:text-base lg:mx-0">
-              {healthSummary?.summary_statement ||
+              {healthSummary?.summary_statement?.match(/^.*?\.(?=\s|$)/)?.[0] ||
+                healthSummary?.summary_statement ||
                 'Synchronize repository to evaluate live health statement.'}
             </p>
 
@@ -870,7 +871,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
         </div>
       </section>
 
-      <section className="relative z-10 -mt-12 grid grid-cols-1 gap-4 px-2 sm:-mt-14 sm:grid-cols-2 sm:px-4 lg:px-8 xl:grid-cols-4">
+      <section className="relative z-10 -mt-12 grid grid-cols-1 gap-4 px-2 sm:-mt-14 sm:grid-cols-2 lg:grid-cols-4 sm:px-4 lg:px-8">
         <Plate
           icon={GitPullRequest}
           label="Review flow"
@@ -930,7 +931,7 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
             />
           ) : (
             <>
-              <dl className="grid grid-cols-3 gap-3">
+              <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl bg-[#EAF8F3] px-4 py-3">
                   <dt className="text-xs text-slate-500">Commits</dt>
                   <dd className="font-display text-2xl font-bold tabular-nums text-slate-900">
@@ -951,30 +952,32 @@ export const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                 </div>
               </dl>
 
-              <div
-                className="mt-5 grid grid-flow-col grid-rows-7 gap-[3px] sm:gap-1"
-                style={{ gridAutoColumns: 'minmax(0, 1fr)' }}
-                role="img"
-                aria-label={`${heatmap.total} commits over the last ${HEATMAP_WEEKS} weeks`}
-              >
-                {heatmap.cells.map((cell) => {
-                  const level =
-                    cell.count === 0
-                      ? 0
-                      : Math.max(1, Math.ceil((cell.count / heatmap.peak) * 4));
+              <div className="mt-5 w-full overflow-x-auto pb-2">
+                <div
+                  className="grid min-w-[500px] grid-flow-col grid-rows-7 gap-[3px] sm:gap-1"
+                  style={{ gridAutoColumns: 'minmax(0, 1fr)' }}
+                  role="img"
+                  aria-label={`${heatmap.total} commits over the last ${HEATMAP_WEEKS} weeks`}
+                >
+                  {heatmap.cells.map((cell) => {
+                    const level =
+                      cell.count === 0
+                        ? 0
+                        : Math.max(1, Math.ceil((cell.count / heatmap.peak) * 4));
 
-                  return (
-                    <div
-                      key={cell.key}
-                      title={`${cell.date.toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                      })}: ${cell.count} commit${cell.count === 1 ? '' : 's'}`}
-                      className="h-3.5 rounded-[3px] sm:h-5"
-                      style={{ backgroundColor: HEAT_LEVELS[level] }}
-                    />
-                  );
-                })}
+                    return (
+                      <div
+                        key={cell.key}
+                        title={`${cell.date.toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}: ${cell.count} commit${cell.count === 1 ? '' : 's'}`}
+                        className="h-3.5 rounded-[3px] sm:h-5"
+                        style={{ backgroundColor: HEAT_LEVELS[level] }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">

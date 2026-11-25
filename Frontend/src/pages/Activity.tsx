@@ -128,7 +128,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
   const filteredCommits = commits.filter((c) => {
     const msg = (c.message || '').toLowerCase();
     const author = (
-      c.author?.name || c.author_name || ''
+      (typeof c.author === 'string' ? c.author : c.author?.name) || c.author_name || ''
     ).toLowerCase();
     const sha = (c.sha || '').toLowerCase();
 
@@ -260,7 +260,7 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
         <button
           onClick={handleSyncCurrent}
           disabled={isSyncing}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
+          className="w-full sm:w-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#0B6B63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#084F49] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B63]"
         >
           <RefreshCw className="h-4 w-4" />
           {isSyncing
@@ -362,11 +362,11 @@ export const Activity: React.FC<ActivityProps> = ({ project, onNavigate }) => {
             <div className="divide-y divide-[#9ED4C8]">
               {filteredCommits.map((c, i) => {
                 const authorName =
-                  c.author?.name ||
+                  (typeof c.author === 'string' ? c.author : c.author?.name) ||
                   c.author_name ||
                   c.author?.login ||
                   'Developer';
-                const dateStr = c.date || c.authored_date || c.created_at;
+                const dateStr = c.timestamp || c.date || c.authored_date || c.created_at;
                 const shortSha = (c.sha || '').substring(0, 7);
 
                 return (
