@@ -14,8 +14,10 @@ sprint-issue-roadmap/
 │   └── README.md          # Sprint 1: Foundation, Auth, Projects, Commits, Contributors, UI
 ├── sprint-2/
 │   └── README.md          # Sprint 2: PRs, Issues, Milestones, Risk Engines, Health Score, Dashboard
-└── sprint-3/
-    └── README.md          # Sprint 3: AI Safety, Reports, PDF, Email, Slack, Scheduler
+├── sprint-3/
+│   └── README.md          # Sprint 3: AI Safety, Reports, PDF, Email, Slack, Scheduler
+└── sprint-4/
+    └── README.md          # Sprint 4: Feedback, Administration, Hardening & Release
 ```
 
 ---
@@ -27,8 +29,9 @@ flowchart LR
     S1["Sprint 1: Foundation & GitHub Access<br/>(#36, #38, #24, #31, #32, #35, #34, #33, #30, #39)"]
     S2["Sprint 2: Telemetry & Risk Engines<br/>(#67, #68, #70, #74, #72, #69, #71, #73, #65, #58, #66)"]
     S3["Sprint 3: AI Explanations & Delivery<br/>(#78, #77, #81, #83, #80, #82, #84, #75, #76, #79)"]
+    S4["Sprint 4: Feedback, Hardening & Release<br/>(#110, #115, #111, #114, #113, #116, #117, #109, #106, #112)"]
 
-    S1 --> S2 --> S3
+    S1 --> S2 --> S3 --> S4
 ```
 
 ---
@@ -45,8 +48,9 @@ flowchart LR
    - [Sprint 1 Roadmap](sprint-1/README.md)
    - [Sprint 2 Roadmap](sprint-2/README.md)
    - [Sprint 3 Roadmap](sprint-3/README.md)
+   - [Sprint 4 Roadmap](sprint-4/README.md)
 
 
 ---
 
-> *Verified against live GitHub Issues on October 31, 2026.*
+> *Verified against live GitHub Issues on November 25, 2026.*
