@@ -41,11 +41,11 @@ Set up the MongoDB database and safe secret handling, build authentication and p
 
 **9. [Issue #30 — Build Authentication, Project Creation and Repository Connection UI](https://github.com/OpenTirZ/Ai-Software-Project-Health-and-Risk-Analyzer/issues/30)**  
 - **Why next:** React interface for Login, Signup, Project Creation, and Repository Connection. Consumes backend APIs from #31 and #35.  
-- **Status:** **Open** (Needs frontend implementation).
+- **Status:** **Closed** (Implemented in `Frontend/src/pages/Login.tsx`, `SignUp.tsx`, `Projects.tsx`, `ConnectRepository.tsx`).
 
 **10. [Issue #39 — Perform End-to-End Integration Testing and Document Sprint 1](https://github.com/OpenTirZ/Ai-Software-Project-Health-and-Risk-Analyzer/issues/39)**  
 - **Why last:** Validates the entire happy path across frontend and backend, verifies error handling, and prepares the Sprint 1 demo.  
-- **Status:** **Open** (Integration verification gate).
+- **Status:** **Closed** (Validated with end-to-end integration tests).
 
 ---
 
@@ -108,9 +108,9 @@ flowchart TD
 - [x] User registration, login, and RBAC operational.
 - [x] Project creation and repository URL linking operational.
 - [x] Contributor and commit ingestion working with zero duplicate records (47 unit tests pass).
-- [ ] Working React UI for Login, Signup, Project Creation, and Repo Connection ([#30](https://github.com/OpenTirZ/Ai-Software-Project-Health-and-Risk-Analyzer/issues/30)).
-- [ ] Automated end-to-end test passes from login to repository data storage ([#39](https://github.com/OpenTirZ/Ai-Software-Project-Health-and-Risk-Analyzer/issues/39)).
+- [x] Working React UI for Login, Signup, Project Creation, and Repo Connection ([#30](https://github.com/OpenTirZ/Ai-Software-Project-Health-and-Risk-Analyzer/issues/30)).
+- [x] Automated end-to-end test passes from login to repository data storage ([#39](https://github.com/OpenTirZ/Ai-Software-Project-Health-and-Risk-Analyzer/issues/39)).
 
 ---
 
-> *Verified against live GitHub Issues and source code on October 31, 2026.*
+> *Verified against live GitHub Issues and source code on November 25, 2026.*
