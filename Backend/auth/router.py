@@ -12,11 +12,15 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from Backend.auth.dependencies import get_current_user
+from Backend.auth.otp import generate_otp, save_otp, send_otp_email, verify_otp
 from Backend.auth.schemas import (
     LoginRequest,
     MessageResponse,
     NotificationPreferences,
     NotificationPreferencesUpdate,
+    OTPRequest,
+    OTPResponse,
+    OTPVerifyRequest,
     SignupRequest,
     TokenResponse,
     UserOut,
@@ -133,6 +137,117 @@ def login(payload: LoginRequest):
         raise invalid_exc
 
     access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})
+
+    return TokenResponse(
+        access_token=access_token,
+        user=_build_user_out(user),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/request-otp
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/request-otp",
+    response_model=OTPResponse,
+    summary="Request a one-time password (OTP) via email",
+)
+def request_otp(payload: OTPRequest):
+    """
+    Generate and dispatch a 6-digit numeric OTP to the user's email address.
+
+    - Verifies the user exists and is active.
+    - Generates a cryptographically random 6-digit code.
+    - Stores salted SHA-256 hash with 5-minute TTL in database.
+    - Sends the OTP code to the user via SMTP email.
+    """
+    try:
+        user = get_user_by_email(payload.email)
+    except DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    if user.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
+        )
+
+    code = generate_otp()
+    try:
+        save_otp(payload.email, code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to process OTP request: {exc}",
+        )
+
+    send_otp_email(payload.email, code)
+
+    return OTPResponse(
+        message="OTP sent successfully to your email.",
+        email=payload.email,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/verify-otp
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/verify-otp",
+    response_model=TokenResponse,
+    summary="Verify an OTP code and receive a JWT token",
+)
+def verify_otp_endpoint(payload: OTPVerifyRequest):
+    """
+    Validate an OTP code sent via email.
+
+    - Verifies user exists and is active.
+    - Validates matching OTP code, 5-minute TTL, and max 3 attempts limit.
+    - Immediately consumes / invalidates the OTP upon successful verification.
+    - Issues a standard JWT access token on success.
+    """
+    try:
+        user = get_user_by_email(payload.email)
+    except DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    if user.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
+        )
+
+    try:
+        valid, err_msg = verify_otp(payload.email, payload.code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to verify OTP: {exc}",
+        )
+
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=err_msg,
+        )
+
+    access_token = create_access_token(
+        {"sub": user["_id"], "role": user.get("role", "developer")}
+    )
 
     return TokenResponse(
         access_token=access_token,
