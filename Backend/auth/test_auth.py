@@ -77,6 +77,15 @@ class MockUsersCollection:
                         return doc
         return None
 
+    def update_one(self, query, update_dict, upsert=False):
+        from unittest.mock import MagicMock
+        set_fields = update_dict.get("$set", {})
+        doc = self.find_one(query)
+        if doc:
+            doc.update(set_fields)
+            return MagicMock(matched_count=1, modified_count=1)
+        return MagicMock(matched_count=0, modified_count=0)
+
     def delete_many(self, query):
         _IN_MEMORY_USERS.clear()
 

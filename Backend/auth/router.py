@@ -180,8 +180,8 @@ def login(payload: LoginRequest):
             update_fields["locked_until"] = lock_time.isoformat()
             try:
                 update_user(user["_id"], update_fields)
-            except DatabaseError as exc:
-                raise HTTPException(status_code=503, detail=str(exc))
+            except Exception as exc:
+                logger.warning("Could not persist lockout state for user %s: %s", user.get("_id"), exc)
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
                 detail=f"Account has been temporarily locked for {LOCKOUT_DURATION_MINUTES} minutes due to too many failed login attempts.",
@@ -189,8 +189,8 @@ def login(payload: LoginRequest):
         else:
             try:
                 update_user(user["_id"], update_fields)
-            except DatabaseError as exc:
-                raise HTTPException(status_code=503, detail=str(exc))
+            except Exception as exc:
+                logger.warning("Could not persist failed login attempts for user %s: %s", user.get("_id"), exc)
             remaining = MAX_LOGIN_ATTEMPTS - failed_attempts
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -202,7 +202,7 @@ def login(payload: LoginRequest):
     if user.get("failed_login_attempts", 0) > 0 or user.get("locked_until"):
         try:
             update_user(user["_id"], {"failed_login_attempts": 0, "locked_until": None})
-        except DatabaseError:
+        except Exception:
             pass
 
     access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})
