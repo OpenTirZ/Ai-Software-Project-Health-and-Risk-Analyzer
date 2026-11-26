@@ -249,8 +249,8 @@ function AppRoutes() {
     setIsAuthLoading(true);
     authApi.getMe()
       .then((user) => {
-        if (localStorage.getItem('aegis_token') !== token) return;
         if (!user) throw new Error('Session could not be verified');
+        if (localStorage.getItem('aegis_token') !== token) return;
         setIsAuthenticated(true);
         setCurrentUser((previous) => {
           const cleanUsername = user.username?.startsWith('@')
@@ -269,7 +269,8 @@ function AppRoutes() {
         void loadProjects();
       })
       .catch(() => {
-        if (localStorage.getItem('aegis_token') === token) {
+        const currentToken = localStorage.getItem('aegis_token');
+        if (!currentToken || currentToken === token) {
           localStorage.removeItem('aegis_token');
           localStorage.removeItem('aegis_auth');
           localStorage.removeItem('aegis_user');

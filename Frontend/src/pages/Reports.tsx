@@ -355,7 +355,7 @@ export const Reports: React.FC<ReportsProps> = ({
       {generating && <GenerationSkeleton />}
 
       {/* ─── Active Flags (clickable for AI explanation) ─── */}
-      {healthFlags && healthFlags.active_flags.length > 0 && !generating && (
+      {Array.isArray(healthFlags?.active_flags) && healthFlags.active_flags.length > 0 && !generating && (
         <section className="rounded-xl border border-[#9ED4C8] bg-white p-5">
           <div className="flex items-center gap-2 mb-3">
             <ShieldAlert className="h-5 w-5 text-[#CC1F2E]" />

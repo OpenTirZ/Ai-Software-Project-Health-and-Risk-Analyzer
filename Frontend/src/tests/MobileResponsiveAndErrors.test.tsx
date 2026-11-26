@@ -25,7 +25,7 @@ describe('Mobile (375px) Responsive Layout & Drawer Navigation Tests', () => {
     vi.clearAllMocks();
   });
 
-  it('1. Mobile Sidebar defaults to hidden off-screen (-translate-x-full) when isOpen is false', () => {
+  it('1. Mobile Sidebar defaults to desktop-only (hidden md:flex) with no mobile drawer when isOpen is false', () => {
     const { container } = render(
       <Sidebar
         currentView="overview"
@@ -35,12 +35,13 @@ describe('Mobile (375px) Responsive Layout & Drawer Navigation Tests', () => {
       />
     );
     const aside = container.querySelector('aside');
-    expect(aside).toHaveClass('-translate-x-full');
-    expect(aside).not.toHaveClass('translate-x-0');
+    expect(aside).toHaveClass('hidden');
+    expect(aside).toHaveClass('md:flex');
+    expect(screen.queryByRole('dialog', { name: /navigation drawer/i })).not.toBeInTheDocument();
   });
 
-  it('2. Mobile Sidebar slides into viewport (translate-x-0) when isOpen is true', () => {
-    const { container } = render(
+  it('2. Mobile Sidebar renders accessible navigation drawer dialog when isOpen is true', () => {
+    render(
       <Sidebar
         currentView="overview"
         onNavigate={mockNavigate}
@@ -48,11 +49,12 @@ describe('Mobile (375px) Responsive Layout & Drawer Navigation Tests', () => {
         isOpen={true}
       />
     );
-    const aside = container.querySelector('aside');
-    expect(aside).toHaveClass('translate-x-0');
+    const drawer = screen.getByRole('dialog', { name: /navigation drawer/i });
+    expect(drawer).toBeInTheDocument();
+    expect(drawer).toHaveClass('transition-transform');
   });
 
-  it('3. TopBar renders mobile hamburger button (lg:hidden) with accessible aria-label', () => {
+  it('3. TopBar renders mobile hamburger button (md:hidden) with accessible aria-label', () => {
     const mockOpenMenu = vi.fn();
     render(
       <TopBar
@@ -64,7 +66,7 @@ describe('Mobile (375px) Responsive Layout & Drawer Navigation Tests', () => {
 
     const hamburgerBtn = screen.getByRole('button', { name: /open navigation menu/i });
     expect(hamburgerBtn).toBeInTheDocument();
-    expect(hamburgerBtn).toHaveClass('lg:hidden');
+    expect(hamburgerBtn).toHaveClass('md:hidden');
 
     fireEvent.click(hamburgerBtn);
     expect(mockOpenMenu).toHaveBeenCalledTimes(1);
@@ -77,17 +79,18 @@ describe('Mobile (375px) Responsive Layout & Drawer Navigation Tests', () => {
       </Layout>
     );
 
-    // Initial state: backdrop is not in the DOM
+    // Initial state: drawer & backdrop are not in the DOM
     expect(screen.queryByLabelText(/close navigation menu/i)).not.toBeInTheDocument();
 
     // Click mobile hamburger menu in TopBar
     const hamburgerBtn = screen.getByRole('button', { name: /open navigation menu/i });
     fireEvent.click(hamburgerBtn);
 
-    // Backdrop overlay is now visible
-    const backdropBtn = screen.getByLabelText(/close navigation menu/i);
+    // Backdrop overlay and close button are now visible
+    const closeButtons = screen.getAllByLabelText(/close navigation menu/i);
+    const backdropBtn = closeButtons[0];
     expect(backdropBtn).toBeInTheDocument();
-    expect(backdropBtn).toHaveClass('lg:hidden');
+    expect(backdropBtn).toHaveClass('md:hidden');
 
     // Clicking backdrop closes drawer
     fireEvent.click(backdropBtn);
