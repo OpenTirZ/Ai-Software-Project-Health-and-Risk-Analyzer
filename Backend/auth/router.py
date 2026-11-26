@@ -7,7 +7,7 @@ Endpoints:
     POST /auth/logout  – Stateless logout (client discards token)
     GET  /auth/me      – Return the authenticated user's profile
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -103,6 +103,10 @@ def signup(payload: SignupRequest):
 # POST /auth/login
 # ---------------------------------------------------------------------------
 
+MAX_LOGIN_ATTEMPTS: int = 5
+LOCKOUT_DURATION_MINUTES: int = 15
+
+
 @router.post(
     "/login",
     response_model=TokenResponse,
@@ -113,8 +117,10 @@ def login(payload: LoginRequest):
     Authenticate with email + password.
 
     Returns a Bearer token on success.
-    Returns **401** for invalid credentials (intentionally vague to prevent
-    user enumeration).
+    Enforces brute-force protection:
+      - Tracks failed login attempts per account.
+      - Temporarily locks account for 15 minutes after 5 consecutive failures (HTTP 423).
+      - Resets failed attempt counter upon successful login.
     """
     invalid_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -130,11 +136,74 @@ def login(payload: LoginRequest):
     if not user:
         raise invalid_exc
 
-    if (
-        not verify_password(payload.password, user.get("password_hash", ""))
-        or user.get("is_active") is False
-    ):
+    if user.get("is_active") is False:
         raise invalid_exc
+
+    now = datetime.now(timezone.utc)
+
+    # Check if account is temporarily locked out
+    locked_until_raw = user.get("locked_until")
+    if locked_until_raw:
+        if isinstance(locked_until_raw, str):
+            try:
+                locked_until = datetime.fromisoformat(locked_until_raw)
+            except (ValueError, TypeError):
+                locked_until = None
+        elif isinstance(locked_until_raw, datetime):
+            locked_until = locked_until_raw
+        else:
+            locked_until = None
+
+        if locked_until:
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if now < locked_until:
+                remaining_seconds = int((locked_until - now).total_seconds())
+                remaining_minutes = max(1, (remaining_seconds + 59) // 60)
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail=f"Account is temporarily locked due to multiple failed login attempts. Please try again in {remaining_minutes} minute(s).",
+                )
+            else:
+                try:
+                    update_user(user["_id"], {"failed_login_attempts": 0, "locked_until": None})
+                except DatabaseError:
+                    pass
+
+    # Validate password
+    if not verify_password(payload.password, user.get("password_hash", "")):
+        failed_attempts = int(user.get("failed_login_attempts", 0)) + 1
+        update_fields: dict = {"failed_login_attempts": failed_attempts}
+
+        if failed_attempts >= MAX_LOGIN_ATTEMPTS:
+            lock_time = now + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+            update_fields["locked_until"] = lock_time.isoformat()
+            try:
+                update_user(user["_id"], update_fields)
+            except DatabaseError as exc:
+                raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account has been temporarily locked for {LOCKOUT_DURATION_MINUTES} minutes due to too many failed login attempts.",
+            )
+        else:
+            try:
+                update_user(user["_id"], update_fields)
+            except DatabaseError as exc:
+                raise HTTPException(status_code=503, detail=str(exc))
+            remaining = MAX_LOGIN_ATTEMPTS - failed_attempts
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid email or password. {remaining} attempt(s) remaining before account lockout.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # Successful login: reset failed attempts if any
+    if user.get("failed_login_attempts", 0) > 0 or user.get("locked_until"):
+        try:
+            update_user(user["_id"], {"failed_login_attempts": 0, "locked_until": None})
+        except DatabaseError:
+            pass
 
     access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})
 
