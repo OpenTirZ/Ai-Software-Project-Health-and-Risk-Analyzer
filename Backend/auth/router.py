@@ -7,16 +7,20 @@ Endpoints:
     POST /auth/logout  – Stateless logout (client discards token)
     GET  /auth/me      – Return the authenticated user's profile
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from Backend.auth.dependencies import get_current_user
+from Backend.auth.otp import generate_otp, save_otp, send_otp_email, verify_otp
 from Backend.auth.schemas import (
     LoginRequest,
     MessageResponse,
     NotificationPreferences,
     NotificationPreferencesUpdate,
+    OTPRequest,
+    OTPResponse,
+    OTPVerifyRequest,
     SignupRequest,
     TokenResponse,
     UserOut,
@@ -111,6 +115,10 @@ def signup(payload: SignupRequest):
 # POST /auth/login
 # ---------------------------------------------------------------------------
 
+MAX_LOGIN_ATTEMPTS: int = 5
+LOCKOUT_DURATION_MINUTES: int = 15
+
+
 @router.post(
     "/login",
     response_model=TokenResponse,
@@ -121,8 +129,10 @@ def login(payload: LoginRequest):
     Authenticate with email + password.
 
     Returns a Bearer token on success.
-    Returns **401** for invalid credentials (intentionally vague to prevent
-    user enumeration).
+    Enforces brute-force protection:
+      - Tracks failed login attempts per account.
+      - Temporarily locks account for 15 minutes after 5 consecutive failures (HTTP 423).
+      - Resets failed attempt counter upon successful login.
     """
     invalid_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -138,13 +148,187 @@ def login(payload: LoginRequest):
     if not user:
         raise invalid_exc
 
-    if (
-        not verify_password(payload.password, user.get("password_hash", ""))
-        or user.get("is_active") is False
-    ):
+    if user.get("is_active") is False:
         raise invalid_exc
 
+    now = datetime.now(timezone.utc)
+
+    # Check if account is temporarily locked out
+    locked_until_raw = user.get("locked_until")
+    if locked_until_raw:
+        if isinstance(locked_until_raw, str):
+            try:
+                locked_until = datetime.fromisoformat(locked_until_raw)
+            except (ValueError, TypeError):
+                locked_until = None
+        elif isinstance(locked_until_raw, datetime):
+            locked_until = locked_until_raw
+        else:
+            locked_until = None
+
+        if locked_until:
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if now < locked_until:
+                remaining_seconds = int((locked_until - now).total_seconds())
+                remaining_minutes = max(1, (remaining_seconds + 59) // 60)
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail=f"Account is temporarily locked due to multiple failed login attempts. Please try again in {remaining_minutes} minute(s).",
+                )
+            else:
+                try:
+                    update_user(user["_id"], {"failed_login_attempts": 0, "locked_until": None})
+                except DatabaseError:
+                    pass
+
+    # Validate password
+    if not verify_password(payload.password, user.get("password_hash", "")):
+        failed_attempts = int(user.get("failed_login_attempts", 0)) + 1
+        update_fields: dict = {"failed_login_attempts": failed_attempts}
+
+        if failed_attempts >= MAX_LOGIN_ATTEMPTS:
+            lock_time = now + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+            update_fields["locked_until"] = lock_time.isoformat()
+            try:
+                update_user(user["_id"], update_fields)
+            except Exception as exc:
+                logger.warning("Could not persist lockout state for user %s: %s", user.get("_id"), exc)
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account has been temporarily locked for {LOCKOUT_DURATION_MINUTES} minutes due to too many failed login attempts.",
+            )
+        else:
+            try:
+                update_user(user["_id"], update_fields)
+            except Exception as exc:
+                logger.warning("Could not persist failed login attempts for user %s: %s", user.get("_id"), exc)
+            remaining = MAX_LOGIN_ATTEMPTS - failed_attempts
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid email or password. {remaining} attempt(s) remaining before account lockout.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # Successful login: reset failed attempts if any
+    if user.get("failed_login_attempts", 0) > 0 or user.get("locked_until"):
+        try:
+            update_user(user["_id"], {"failed_login_attempts": 0, "locked_until": None})
+        except Exception:
+            pass
+
     access_token = create_access_token({"sub": user["_id"], "role": user.get("role", "developer")})
+
+    return TokenResponse(
+        access_token=access_token,
+        user=_build_user_out(user),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/request-otp
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/request-otp",
+    response_model=OTPResponse,
+    summary="Request a one-time password (OTP) via email",
+)
+def request_otp(payload: OTPRequest):
+    """
+    Generate and dispatch a 6-digit numeric OTP to the user's email address.
+
+    - Verifies the user exists and is active.
+    - Generates a cryptographically random 6-digit code.
+    - Stores salted SHA-256 hash with 5-minute TTL in database.
+    - Sends the OTP code to the user via SMTP email.
+    """
+    try:
+        user = get_user_by_email(payload.email)
+    except DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    if user.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
+        )
+
+    code = generate_otp()
+    try:
+        save_otp(payload.email, code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to process OTP request: {exc}",
+        )
+
+    send_otp_email(payload.email, code)
+
+    return OTPResponse(
+        message="OTP sent successfully to your email.",
+        email=payload.email,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/verify-otp
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/verify-otp",
+    response_model=TokenResponse,
+    summary="Verify an OTP code and receive a JWT token",
+)
+def verify_otp_endpoint(payload: OTPVerifyRequest):
+    """
+    Validate an OTP code sent via email.
+
+    - Verifies user exists and is active.
+    - Validates matching OTP code, 5-minute TTL, and max 3 attempts limit.
+    - Immediately consumes / invalidates the OTP upon successful verification.
+    - Issues a standard JWT access token on success.
+    """
+    try:
+        user = get_user_by_email(payload.email)
+    except DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    if user.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
+        )
+
+    try:
+        valid, err_msg = verify_otp(payload.email, payload.code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to verify OTP: {exc}",
+        )
+
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=err_msg,
+        )
+
+    access_token = create_access_token(
+        {"sub": user["_id"], "role": user.get("role", "developer")}
+    )
 
     return TokenResponse(
         access_token=access_token,

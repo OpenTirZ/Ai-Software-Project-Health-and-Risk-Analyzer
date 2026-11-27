@@ -64,6 +64,47 @@ class MessageResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# OTP Authentication schemas
+# ---------------------------------------------------------------------------
+
+class OTPRequest(BaseModel):
+    email: EmailStr = Field(..., description="User's email address")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_input(cls, v: str) -> str:
+        if isinstance(v, str):
+            return normalize_email(v)
+        return v
+
+
+class OTPVerifyRequest(BaseModel):
+    email: EmailStr = Field(..., description="User's email address")
+    code: str = Field(..., min_length=6, max_length=6, description="6-digit OTP code")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_input(cls, v: str) -> str:
+        if isinstance(v, str):
+            return normalize_email(v)
+        return v
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            if not v.isdigit() or len(v) != 6:
+                raise ValueError("OTP code must be exactly 6 numeric digits.")
+        return v
+
+
+class OTPResponse(BaseModel):
+    message: str
+    email: str
+
+
+# ---------------------------------------------------------------------------
 # Notification preferences schemas
 # ---------------------------------------------------------------------------
 
