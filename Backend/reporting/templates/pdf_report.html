@@ -1,281 +1,650 @@
-
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Project Health Report</title>
+    <title>{{ project_name }} - Technical Health &amp; Risk Audit</title>
 
     <style>
+        /* -------------------------------------------------------------------------
+           Page Templates (xhtml2pdf multi-page setup)
+           - Default unnamed @page: Cover Page with branded stationery background
+           - Named @page inner_page: Inner content pages with running header & footer
+        ------------------------------------------------------------------------- */
         @page {
-            size: A4;
-            margin: 35px 40px;
+            size: A4 portrait;
+            margin: 0;
+            {% if cover_bg_path %}
+            background-image: url('{{ cover_bg_path }}');
+            {% endif %}
+            @frame content_frame {
+                left: 18mm; top: 22mm; width: 174mm; height: 252mm;
+            }
+        }
+
+        @page inner_page {
+            size: A4 portrait;
+            margin: 20mm 18mm 20mm 18mm;
+            {% if inner_bg_path %}
+            background-image: url('{{ inner_bg_path }}');
+            {% endif %}
+            @frame header_frame {
+                -pdf-frame-content: page_header;
+                left: 18mm; width: 174mm; top: 8mm; height: 12mm;
+            }
+            @frame content_frame {
+                left: 18mm; width: 174mm; top: 22mm; height: 250mm;
+            }
+            @frame footer_frame {
+                -pdf-frame-content: page_footer;
+                left: 18mm; width: 174mm; top: 275mm; height: 12mm;
+            }
         }
 
         body {
             font-family: Helvetica, Arial, sans-serif;
-            color: #263238;
-            font-size: 10px;
-            line-height: 1.5;
+            font-size: 8.5pt;
+            color: #0F172A;
+            line-height: 1.42;
         }
 
-        .header {
-            border-bottom: 3px solid #2563eb;
-            padding-bottom: 14px;
-            margin-bottom: 22px;
+        /* -------------------------------------------------------------------------
+           Running Header & Running Footer
+        ------------------------------------------------------------------------- */
+        .running-header-table {
+            width: 100%;
+            border-bottom: 1pt solid #004D40;
+            padding-bottom: 3pt;
+            font-size: 7.5pt;
+            color: #475569;
+        }
+        .header-logo {
+            height: 12pt;
+            vertical-align: middle;
+            margin-right: 4pt;
+        }
+        .header-brand-title {
+            font-weight: bold;
+            color: #004D40;
+            font-size: 8pt;
+        }
+        .header-confidential {
+            text-align: right;
+            font-weight: bold;
+            letter-spacing: 0.5pt;
+            color: #64748B;
+            font-size: 7pt;
+        }
+        .running-footer-table {
+            width: 100%;
+            border-top: 0.5pt solid #CBD5E1;
+            padding-top: 3pt;
+            font-size: 7pt;
+            color: #64748B;
         }
 
-        h1 {
-            color: #172554;
-            font-size: 24px;
-            margin-bottom: 5px;
+        /* -------------------------------------------------------------------------
+           Cover Page Elements
+        ------------------------------------------------------------------------- */
+        .cover-top-table {
+            width: 100%;
+            margin-bottom: 35px;
+        }
+        .cover-logo-img {
+            height: 38pt;
+            vertical-align: middle;
+        }
+        .cover-brand-title {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #004D40;
+            letter-spacing: 0.5pt;
+        }
+        .cover-brand-sub {
+            font-size: 7.5pt;
+            font-weight: bold;
+            color: #0F807C;
+            letter-spacing: 0.8pt;
+            text-transform: uppercase;
+        }
+        .cover-engine-meta {
+            text-align: right;
+            font-size: 7.5pt;
+            color: #475569;
+            line-height: 1.35;
         }
 
-        h2 {
-            color: #1e40af;
-            font-size: 15px;
-            border-bottom: 1px solid #dbeafe;
-            padding-bottom: 5px;
-            margin-top: 24px;
+        .cover-hero {
+            margin-top: 15px;
+            border-left: 5pt solid #004D40;
+            padding-left: 12px;
+            margin-bottom: 30px;
+        }
+        .cover-doc-badge {
+            font-size: 8.5pt;
+            font-weight: bold;
+            color: #0F807C;
+            text-transform: uppercase;
+            letter-spacing: 1.2pt;
+            margin-bottom: 4px;
+        }
+        .cover-main-title {
+            font-size: 23pt;
+            font-weight: bold;
+            color: #004D40;
+            line-height: 1.15;
+            margin: 0;
+            letter-spacing: -0.2pt;
+        }
+        .cover-subtitle {
+            font-size: 9.5pt;
+            color: #475569;
+            margin-top: 6px;
         }
 
-        h3 {
-            font-size: 12px;
+        .cover-project-card {
+            background-color: #F8FAFC;
+            border: 1pt solid #CBD5E1;
+            border-left: 4pt solid #004D40;
+            padding: 12px 14px;
+            margin-bottom: 25px;
+        }
+        .cover-project-label {
+            font-size: 7.5pt;
+            font-weight: bold;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.8pt;
+        }
+        .cover-project-name {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0F172A;
+            margin-top: 2px;
+            margin-bottom: 8px;
+        }
+        .cover-meta-grid {
+            width: 100%;
+            border-top: 0.5pt solid #E2E8F0;
+            padding-top: 8px;
+            font-size: 8pt;
+        }
+        .cover-meta-grid td {
+            padding: 2pt 4pt;
             color: #334155;
         }
 
-        .metadata {
-            color: #64748b;
-            font-size: 9px;
-        }
-
-        .health-card {
-            background-color: #eff6ff;
-            border: 1px solid #bfdbfe;
-            padding: 12px;
-            margin: 15px 0;
-        }
-
-        .score {
-            font-size: 23px;
-            font-weight: bold;
-            color: #1d4ed8;
-        }
-
-        .summary {
-            background-color: #f8fafc;
-            padding: 12px;
-            border-left: 3px solid #2563eb;
-        }
-
-        .item {
-            padding: 7px 0;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .priority {
-            color: #b45309;
-            font-weight: bold;
-        }
-
-        table {
+        .cover-scope-table {
             width: 100%;
-            margin-top: 8px;
+            border: 0.5pt solid #CBD5E1;
+            font-size: 7.5pt;
+            margin-bottom: 35px;
+        }
+        .cover-scope-table tr.header-row td {
+            background-color: #F1F5F9;
+            font-weight: bold;
+            color: #004D40;
+            padding: 5pt;
+            border-bottom: 0.5pt solid #CBD5E1;
+        }
+        .cover-scope-table tr.data-row td {
+            padding: 5pt;
+            color: #334155;
         }
 
-        th, td {
-            border: 1px solid #cbd5e1;
-            padding: 7px;
-            text-align: left;
+        .cover-footer-notice {
+            font-size: 7pt;
+            color: #64748B;
+            letter-spacing: 0.3pt;
+            border-top: 0.5pt solid #CBD5E1;
+            padding-top: 6px;
+            line-height: 1.35;
         }
 
-        th {
-            background-color: #eff6ff;
-            color: #1e3a8a;
+        /* -------------------------------------------------------------------------
+           Section Headings & Content Layout
+        ------------------------------------------------------------------------- */
+        .section-heading {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #004D40;
+            letter-spacing: 0.3pt;
+            border-left: 3pt solid #004D40;
+            padding-left: 5pt;
+            margin-top: 13pt;
+            margin-bottom: 5pt;
         }
-
-        .empty {
-            color: #64748b;
+        .sub-heading {
+            font-size: 8.5pt;
+            font-weight: bold;
+            color: #0F807C;
+            margin-top: 8pt;
+            margin-bottom: 3pt;
+        }
+        .summary-paragraph {
+            font-size: 8.5pt;
+            text-align: justify;
+            color: #1E293B;
+            line-height: 1.45;
+            margin-bottom: 8pt;
+        }
+        .empty-notice {
             font-style: italic;
+            color: #64748B;
+            font-size: 8pt;
+            margin: 4pt 0;
         }
 
-        .footer {
-            margin-top: 30px;
-            padding-top: 8px;
-            border-top: 1px solid #cbd5e1;
-            color: #64748b;
-            font-size: 8px;
-            text-align: center;
+        /* -------------------------------------------------------------------------
+           Tables
+        ------------------------------------------------------------------------- */
+        table.report-table {
+            width: 100%;
+            margin-top: 4pt;
+            margin-bottom: 8pt;
+            font-size: 8pt;
+        }
+        table.report-table thead tr th {
+            background-color: #004D40;
+            color: #FFFFFF;
+            font-weight: bold;
+            padding: 4pt 6pt;
+            text-align: left;
+            border: 0.5pt solid #004D40;
+        }
+        table.report-table tbody tr td {
+            border: 0.5pt solid #CBD5E1;
+            padding: 4pt 6pt;
+            color: #1E293B;
+            vertical-align: top;
+        }
+        /* no alternating background to prevent zebra masking on watermark */
+
+        /* -------------------------------------------------------------------------
+           Tags & Status Badges
+        ------------------------------------------------------------------------- */
+        .sev-tag {
+            font-weight: bold;
+            font-size: 7.5pt;
+        }
+        .sev-high { color: #D51F2B; }
+        .sev-medium { color: #B45309; }
+        .sev-low { color: #004D40; }
+
+        .prio-tag {
+            font-weight: bold;
+            font-size: 7.5pt;
+            color: #004D40;
+        }
+
+        .governance-note {
+            font-size: 7.5pt;
+            color: #64748B;
+            margin-top: 16pt;
+            border-top: 0.5pt solid #CBD5E1;
+            padding-top: 4pt;
+            font-style: italic;
+            line-height: 1.35;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="header">
-        <h1>{{ project_name }}</h1>
-        <div class="metadata">Project Health & Risk Analysis Report</div>
-        <div class="metadata">Generated: {{ generated_at }}</div>
-        <div class="metadata">Reporting period: {{ reporting_period }}</div>
+    <!-- =======================================================================
+         Running Page Header (For Inner Pages)
+    ======================================================================== -->
+    <div id="page_header">
+        <table class="running-header-table">
+            <tr>
+                <td align="left">
+                    {% if header_logo_path %}
+                    <img src="{{ header_logo_path }}" class="header-logo" />
+                    {% endif %}
+                    <span class="header-brand-title">KAVACH</span> | Project Health &amp; Risk Intelligence
+                </td>
+                <td class="header-confidential">
+                    CONFIDENTIAL AUDIT REPORT
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <h2>Project Health Overview</h2>
+    <!-- =======================================================================
+         Running Page Footer (For Inner Pages)
+    ======================================================================== -->
+    <div id="page_footer">
+        <table class="running-footer-table">
+            <tr>
+                <td align="left">
+                    AI Software Project Health &amp; Risk Analyzer &mdash; Formal Technical Assessment
+                </td>
+                <td align="right">
+                    Page <pdf:pagenumber> of <pdf:pagecount>
+                </td>
+            </tr>
+        </table>
+    </div>
 
-    <div class="health-card">
-        <div class="score">
-            {% if health_score is not none %}
-                {{ health_score }}/100
-            {% else %}
-                Not available
-            {% endif %}
+    <!-- =======================================================================
+         PAGE 1: BRANDED EXECUTIVE COVER PAGE
+    ======================================================================== -->
+    <div>
+        <!-- Top Branding Header -->
+        <div class="cover-top-table">
+            <table style="width: 100%;">
+                <tr>
+                    <td style="width: 44pt; vertical-align: middle;">
+                        {% if header_logo_path %}
+                        <img src="{{ header_logo_path }}" class="cover-logo-img" />
+                        {% endif %}
+                    </td>
+                    <td style="vertical-align: middle; padding-left: 8px;">
+                        <div class="cover-brand-title">KAVACH</div>
+                        <div class="cover-brand-sub">Software Project Health &amp; Risk Intelligence</div>
+                    </td>
+                    <td class="cover-engine-meta" align="right">
+                        <strong style="color: #004D40;">ENGINE:</strong> KAVACH Analytics v1.2<br/>
+                        <strong style="color: #004D40;">SECURITY:</strong> Confidential Technical Audit
+                    </td>
+                </tr>
+            </table>
         </div>
-        <strong>Status:</strong> {{ health_status }}
+
+        <!-- Document Hero Title -->
+        <div class="cover-hero">
+            <div class="cover-doc-badge">Comprehensive Technical Audit Report</div>
+            <h1 class="cover-main-title">PROJECT HEALTH &amp;<br/>TECHNICAL RISK ASSESSMENT</h1>
+            <div class="cover-subtitle">Automated Architecture Diagnostics, Heuristic Risk Evaluation &amp; Delivery Telemetry</div>
+        </div>
+
+        <!-- Target Project Identification Card -->
+        <div class="cover-project-card">
+            <div class="cover-project-label">Target Evaluation Project</div>
+            <div class="cover-project-name">{{ project_name }}</div>
+
+            <table class="cover-meta-grid">
+                <tr>
+                    <td style="width: 50%;"><strong>Generated:</strong> {{ generated_at }}</td>
+                    <td style="width: 50%;"><strong>Reporting Period:</strong> {{ reporting_period }}</td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>Composite Health Index:</strong>
+                        {% if health_score is not none %}
+                            {{ health_score }}
+                        {% else %}
+                            Not available
+                        {% endif %} / 100 ({{ health_status }})
+                    </td>
+                    <td><strong>Classification:</strong> Internal Technical Governance</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Assessment Scope Grid -->
+        <table class="cover-scope-table">
+            <tr class="header-row">
+                <td style="width: 25%;">Assessment Scope</td>
+                <td style="width: 25%;">Analytical Framework</td>
+                <td style="width: 25%;">Diagnostic Method</td>
+                <td style="width: 25%;">Clearance Status</td>
+            </tr>
+            <tr class="data-row">
+                <td>VCS Commits, PRs, Sprints</td>
+                <td>ISO/IEC 25010 Quality</td>
+                <td>Continuous Telemetry</td>
+                <td>Audited &amp; Verified</td>
+            </tr>
+        </table>
+
+        <!-- Confidentiality Disclaimer -->
+        <div class="cover-footer-note cover-footer-notice">
+            <strong>PROPRIETARY &amp; CONFIDENTIAL</strong> &mdash; This diagnostic technical report contains proprietary project telemetry and risk scoring. Distribution is restricted to authorized project stakeholders and engineering leadership.
+        </div>
     </div>
 
-    <h2>Executive Summary</h2>
+    <!-- Transition to Inner Pages Template -->
+    <pdf:nextpage name="inner_page" />
 
-    <div class="summary">
+    <!-- =======================================================================
+         SECTION 1: Executive Summary & Project Health Overview
+    ======================================================================== -->
+    <h2 class="section-heading">1. Executive Summary &amp; Project Health Overview</h2>
+    <div class="summary-paragraph">
         {{ executive_summary }}
     </div>
 
-    <h2>Sprint Progress</h2>
+    <table class="report-table">
+        <thead>
+            <tr>
+                <th style="width: 32%;">Assessment Dimension</th>
+                <th style="width: 24%;">Computed Index</th>
+                <th style="width: 24%;">Status Classification</th>
+                <th style="width: 20%;">Evaluation Benchmark</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Composite Health Index</strong></td>
+                <td>
+                    <strong>
+                        {% if health_score is not none %}
+                            {{ health_score }}
+                        {% else %}
+                            Not available
+                        {% endif %}
+                    </strong> / 100
+                </td>
+                <td><strong style="color: #004D40;">{{ health_status }}</strong></td>
+                <td>Nominal (&gt;= 75.0)</td>
+            </tr>
+            <tr>
+                <td><strong>Delivery Bottleneck Latency</strong></td>
+                <td>Active Monitoring</td>
+                <td>Evaluated</td>
+                <td>Threshold: &gt; 48 Hours</td>
+            </tr>
+            <tr>
+                <td><strong>Contributor Workload Imbalance</strong></td>
+                <td>Active Monitoring</td>
+                <td>Evaluated</td>
+                <td>Bus Factor &gt; 50%</td>
+            </tr>
+        </tbody>
+    </table>
 
+    <!-- =======================================================================
+         SECTION 2: Sprint Progress & Milestone Schedule
+    ======================================================================== -->
+    <h2 class="section-heading">2. Sprint Progress &amp; Milestone Schedule</h2>
     {% if sprint_progress %}
-        <p>{{ sprint_progress }}</p>
+        <p style="margin: 4pt 0 6pt 0; font-size: 8pt;"><strong>Milestone Summary:</strong> {{ sprint_progress }}</p>
     {% else %}
-        <p class="empty">Sprint progress details are not available.</p>
+        <p class="empty-notice">Sprint progress details are not available.</p>
     {% endif %}
 
     {% if milestones %}
-        <h3>Milestone Details</h3>
-
-        {% for row in milestones %}
-            <div class="item">
-                {% for field in row %}
-                    <strong>{{ field["label"] }}:</strong>
-                    {{ field["value"] }}<br>
+        <h3 class="sub-heading">Milestone Deliverable Tracking</h3>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    {% set first_row = milestones[0] %}
+                    {% for field in first_row %}
+                        <th>{{ field.label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in milestones %}
+                    <tr>
+                        {% for field in row %}
+                            <td>{{ field.value }}</td>
+                        {% endfor %}
+                    </tr>
                 {% endfor %}
-            </div>
-        {% endfor %}
+            </tbody>
+        </table>
     {% endif %}
 
-    <h2>Detected Bottlenecks</h2>
-
+    <!-- =======================================================================
+         SECTION 3: Detected Bottlenecks & Code Review Latency
+    ======================================================================== -->
+    <h2 class="section-heading">3. Detected Bottlenecks &amp; Code Review Latency</h2>
     {% if bottlenecks %}
-        {% for row in bottlenecks %}
-            <div class="item">
-                {% for field in row %}
-                    <strong>{{ field["label"] }}:</strong>
-                    {{ field["value"] }}<br>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    {% set first_row = bottlenecks[0] %}
+                    {% for field in first_row %}
+                        <th>{{ field.label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in bottlenecks %}
+                    <tr>
+                        {% for field in row %}
+                            <td>{{ field.value }}</td>
+                        {% endfor %}
+                    </tr>
                 {% endfor %}
-            </div>
-        {% endfor %}
+            </tbody>
+        </table>
     {% else %}
-        <p class="empty">No bottleneck details available.</p>
+        <p class="empty-notice">No bottleneck details available.</p>
     {% endif %}
 
-    <h2>Detected Risks</h2>
-
+    <!-- =======================================================================
+         SECTION 4: Detected Risks & Heuristic Vulnerability Findings
+    ======================================================================== -->
+    <h2 class="section-heading">4. Detected Risks &amp; Heuristic Vulnerability Findings</h2>
     {% if risks %}
-        {% for risk in risks %}
-            <div class="item">
-                {% if risk is mapping %}
-                    <strong>
-                        {{ risk.get("title", risk.get("risk_id", "Identified risk")) }}
-                    </strong>
-
-                    {% if risk.get("severity") %}
-                        <span class="priority">
-                            ({{ risk.get("severity") }})
-                        </span>
-                    {% endif %}
-
-                    <p>
-                        {{ risk.get("evidence", risk.get("description", "")) }}
-                    </p>
-
-                    {% if risk.get("recommendation") %}
-                        <p>
-                            Suggested action: {{ risk.get("recommendation") }}
-                        </p>
-                    {% endif %}
-                {% else %}
-                    {{ risk }}
-                {% endif %}
-            </div>
-        {% endfor %}
-    {% else %}
-        <p class="empty">No risks recorded.</p>
-    {% endif %}
-
-    <h2>Workload Breakdown</h2>
-
-    {% if contributors %}
-        {% for row in contributors %}
-            <div class="item">
-                {% for field in row %}
-                    <strong>{{ field["label"] }}:</strong>
-                    {{ field["value"] }}<br>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th style="width: 28%;">Risk Identifier / Finding</th>
+                    <th style="width: 14%;">Severity</th>
+                    <th style="width: 32%;">Observed Evidence</th>
+                    <th style="width: 26%;">Recommended Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for risk in risks %}
+                    <tr>
+                        {% if risk is mapping %}
+                            <td><strong>{{ risk.get("title", risk.get("risk_id", "Identified risk")) }}</strong></td>
+                            <td>
+                                {% set sev = (risk.get("severity") or "Normal") %}
+                                <span class="sev-tag sev-{{ sev | lower }}">{{ sev }}</span>
+                            </td>
+                            <td>{{ risk.get("evidence", risk.get("description", "")) }}</td>
+                            <td>{{ risk.get("recommendation", "Review and triage in active sprint.") }}</td>
+                        {% else %}
+                            <td><strong>Identified Risk</strong></td>
+                            <td><span class="sev-tag sev-medium">Medium</span></td>
+                            <td>{{ risk }}</td>
+                            <td>Investigate root cause and assign peer reviewer.</td>
+                        {% endif %}
+                    </tr>
                 {% endfor %}
-            </div>
-        {% endfor %}
+            </tbody>
+        </table>
     {% else %}
-        <p class="empty">Contributor workload details are not available.</p>
+        <p class="empty-notice">No risks recorded.</p>
     {% endif %}
 
-    <h2>Project Metrics</h2>
+    <!-- =======================================================================
+         SECTION 5: Contributor Workload & Bus Factor Analysis
+    ======================================================================== -->
+    <h2 class="section-heading">5. Contributor Workload &amp; Bus Factor Analysis</h2>
+    {% if contributors %}
+        <table class="report-table">
+            <thead>
+                <tr>
+                    {% set first_row = contributors[0] %}
+                    {% for field in first_row %}
+                        <th>{{ field.label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in contributors %}
+                    <tr>
+                        {% for field in row %}
+                            <td>{{ field.value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="empty-notice">Contributor workload details are not available.</p>
+    {% endif %}
 
+    <!-- =======================================================================
+         SECTION 6: Project Metrics & Telemetry Measurements
+    ======================================================================== -->
+    <h2 class="section-heading">6. Project Metrics &amp; Telemetry Measurements</h2>
     {% if metric_sections %}
         {% for section in metric_sections %}
-            <h3>{{ section["name"] }}</h3>
-
+            <h3 class="sub-heading">{{ section["name"] }}</h3>
             {% if section["values"] %}
-                <table>
-                    <tr>
-                        <th>Metric</th>
-                        <th>Value</th>
-                    </tr>
-
-                    {% for metric in section["values"] %}
+                <table class="report-table">
+                    <thead>
                         <tr>
-                            <td>{{ metric["label"] }}</td>
-                            <td>{{ metric["value"] }}</td>
+                            <th style="width: 60%;">Metric Parameter</th>
+                            <th style="width: 40%;">Evaluated Measurement</th>
                         </tr>
-                    {% endfor %}
+                    </thead>
+                    <tbody>
+                        {% for metric in section["values"] %}
+                            <tr>
+                                <td>{{ metric["label"] }}</td>
+                                <td><strong>{{ metric["value"] }}</strong></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             {% else %}
-                <p class="empty">No metric values available.</p>
+                <p class="empty-notice">No metric values available.</p>
             {% endif %}
         {% endfor %}
     {% else %}
-        <p class="empty">No project metrics available.</p>
+        <p class="empty-notice">No project metrics available.</p>
     {% endif %}
 
-    <h2>AI Recommendations</h2>
-
+    <!-- =======================================================================
+         SECTION 7: AI Recommendations & Action Plan
+    ======================================================================== -->
+    <h2 class="section-heading">7. AI Recommendations &amp; Action Plan</h2>
     {% if recommendations %}
-        {% for recommendation in recommendations %}
-            <div class="item">
-                <strong>{{ recommendation["title"] }}</strong>
-
-                <p>
-                    <span class="priority">Priority:</span>
-                    {{ recommendation["priority"] }}
-                </p>
-
-                <p>
-                    <strong>Action:</strong>
-                    {{ recommendation["action"] }}
-                </p>
-            </div>
-        {% endfor %}
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th style="width: 14%;">Priority</th>
+                    <th style="width: 32%;">Action Item / Focus</th>
+                    <th style="width: 54%;">Prescribed Engineering Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in recommendations %}
+                    <tr>
+                        <td><span class="prio-tag">{{ rec["priority"] }}</span></td>
+                        <td><strong>{{ rec["title"] }}</strong></td>
+                        <td>{{ rec["action"] }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     {% else %}
-        <p class="empty">No recommendations recorded.</p>
+        <p class="empty-notice">No recommendations recorded.</p>
     {% endif %}
 
-    <div class="footer">
-        Generated by AI Software Project Health & Risk Analyzer
-        <br>
-        This report reflects the data available at generation time.
+    <!-- =======================================================================
+         Governance Note & Verification Sign-off
+    ======================================================================== -->
+    <div class="governance-note">
+        <strong>Governance Note:</strong> This assessment report was automatically generated by the AI Software Project Health &amp; Risk Analyzer (KAVACH). All findings and heuristic risk scores represent analytical engineering diagnostics computed at generation time.
     </div>
 
 </body>
