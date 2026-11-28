@@ -188,10 +188,15 @@ def send_otp_email(to_email: str, code: str) -> bool:
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER")
     smtp_pass = os.environ.get("SMTP_PASS") or os.environ.get("SMTP_PASSWORD")
+    if smtp_user:
+        smtp_user = smtp_user.strip()
+    if smtp_pass:
+        smtp_pass = smtp_pass.replace(" ", "").strip()
     smtp_from = (
         os.environ.get("SMTP_FROM")
+        or os.environ.get("SMTP_USER")
         or os.environ.get("MAIL_FROM")
-        or "no-reply@aegis-ai.internal"
+        or "kavachofficial@gmail.com"
     )
 
     if not smtp_host:
@@ -203,30 +208,53 @@ def send_otp_email(to_email: str, code: str) -> bool:
         return True
 
     msg = EmailMessage()
-    msg["Subject"] = "Your Aegis AI Verification Code"
-    msg["From"] = smtp_from
+    msg["Subject"] = "Your KAVACH Verification Code"
+    msg["From"] = f"KAVACH Security <{smtp_from}>" if "<" not in smtp_from else smtp_from
     msg["To"] = to_email
 
     plain_content = (
+        f"KAVACH — Software Project Health & Risk Intelligence\n\n"
         f"Hello,\n\n"
-        f"Your Aegis AI verification code is: {code}\n\n"
-        f"This code will expire in 5 minutes. If you did not request this code, "
+        f"Your one-time verification code is: {code}\n\n"
+        f"This code will expire in 5 minutes. If you did not request this verification code, "
         f"please disregard this message.\n\n"
-        f"— Aegis AI Security Team"
+        f"Security notice: Never share your one-time password with anyone.\n\n"
+        f"— KAVACH Security Team"
     )
+    # Minimalist, clean HTML optimized for inbox deliverability (avoids spam filters)
+    # Uses KAVACH primary brand color: #0F4C47 (Deep Forest Teal)
     html_content = f"""<!DOCTYPE html>
-<html>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 24px;">
-  <div style="max-width: 480px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-    <h2 style="color: #111827; margin-top: 0;">Verification Code</h2>
-    <p style="color: #4b5563; font-size: 15px;">Use the following one-time password to complete your authentication:</p>
-    <div style="background-color: #f3f4f6; border-radius: 6px; padding: 16px; text-align: center; margin: 24px 0;">
-      <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #1d4ed8; font-family: monospace;">{code}</span>
-    </div>
-    <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">This code will expire in <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this email.</p>
-    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-    <p style="color: #9ca3af; font-size: 12px; margin: 0;">&copy; Aegis AI &bull; Project Health &amp; Risk Analyzer</p>
-  </div>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KAVACH Verification Code</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 460px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <tr>
+      <td style="padding: 28px 24px 16px 24px; border-bottom: 2px solid #0F4C47;">
+        <span style="font-size: 20px; font-weight: 700; letter-spacing: 1.5px; color: #0F4C47;">KAVACH</span>
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-top: 2px;">Software Project Health &amp; Risk Intelligence</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 24px;">
+        <p style="font-size: 15px; color: #334155; margin: 0 0 16px 0; line-height: 1.5;">Hello,</p>
+        <p style="font-size: 14px; color: #475569; margin: 0 0 20px 0; line-height: 1.5;">Use the one-time verification code below to complete your authentication:</p>
+        <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 6px; padding: 18px; text-align: center; margin: 0 0 20px 0;">
+          <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #0F4C47; font-family: monospace;">{code}</span>
+        </div>
+        <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 0 0 8px 0;">This code expires in <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this email.</p>
+        <p style="font-size: 12px; color: #94a3b8; line-height: 1.4; margin: 0;">Never share this verification code with anyone.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 16px 24px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 8px 8px;">
+        <p style="font-size: 11px; color: #94a3b8; margin: 0;">&copy; KAVACH Security &bull; Project Health &amp; Risk Analyzer</p>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 """
